@@ -1,5 +1,3 @@
-'use client';
-
 interface CountryRow {
   country: string;
   total: number;

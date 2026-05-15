@@ -67,7 +67,14 @@ async function getDashboardData() {
     liveOnMaps: Number(liveResult.rows[0]?.count ?? 0),
     inAccountNotLive: Number(inAccountResult.rows[0]?.count ?? 0),
     needsAttention: Number(needsResult.rows[0]?.count ?? 0),
-    countryBreakdown: countryResult.rows as unknown as CountryBreakdown[],
+    countryBreakdown: countryResult.rows.map((r) => ({
+      country: String(r.country ?? ''),
+      total: Number(r.total ?? 0),
+      live: Number(r.live ?? 0),
+      not_live: Number(r.not_live ?? 0),
+      submitted: Number(r.submitted ?? 0),
+      needs_pin: Number(r.needs_pin ?? 0),
+    })) as CountryBreakdown[],
     latestSnapshot: snapshotResult.rows[0] as Record<string, unknown> | undefined,
     lastReconciliation: reconResult.rows[0] as Record<string, unknown> | undefined,
   };
