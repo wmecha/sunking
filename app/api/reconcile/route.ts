@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
+import { logAction } from '@/lib/audit';
 
 export async function GET() {
   await initializeSchema();
@@ -33,13 +34,15 @@ export async function POST() {
       args: [latestSnapshot.id as number],
     });
     const gbpLocations = gbpResult.rows as unknown as Array<{
-      id: number; store_code: string; business_name: string; status: string; city: string; country: string;
+      id: number; store_code: string; business_name: string; status: string;
+      address: string; city: string; country: string;
     }>;
 
     // Get all tracker locations
     const trackerResult = await db.execute('SELECT * FROM tracker_locations');
     const trackerLocations = trackerResult.rows as unknown as Array<{
-      id: number; store_code: string; business_name: string; tracker_status: string; city: string; country: string;
+      id: number; store_code: string; business_name: string; tracker_status: string;
+      address: string; city: string; country: string; ov: string; ou: string;
     }>;
 
     const gbpCodes = new Map(
@@ -53,7 +56,12 @@ export async function POST() {
     let ovConfirmed = 0;
     let ouConfirmed = 0;
     const missingFromTracker: typeof gbpLocations = [];
-    const statusMismatches: Array<{ store_code: string; business_name: string; gbp_status: string; tracker_status: string }> = [];
+    const statusMismatches: Array<{
+      store_code: string; business_name: string; gbp_status: string; tracker_status: string;
+    }> = [];
+    const fieldDiffs: Array<{
+      store_code: string; business_name: string; field: string; gbp_value: string; tracker_value: string;
+    }> = [];
 
     for (const gbpLoc of gbpLocations.filter((l) => l.store_code)) {
       const code = gbpLoc.store_code.trim().toUpperCase();
@@ -62,6 +70,7 @@ export async function POST() {
         const trackerLoc = trackerCodes.get(code)!;
         const gbpIsLive = gbpLoc.status?.toLowerCase().trim() === 'published';
         const trackerIsLive = trackerLoc.tracker_status === 'Live';
+
         if (gbpIsLive && !trackerIsLive) {
           statusMismatches.push({
             store_code: code,
@@ -70,6 +79,25 @@ export async function POST() {
             tracker_status: trackerLoc.tracker_status,
           });
         }
+
+        // Field-level diff (name, city, country)
+        const fieldChecks: Array<[string, string | undefined, string | undefined]> = [
+          ['Business Name', gbpLoc.business_name, trackerLoc.business_name],
+          ['City', gbpLoc.city, trackerLoc.city],
+          ['Country', gbpLoc.country, trackerLoc.country],
+        ];
+        for (const [field, gbpVal, trackerVal] of fieldChecks) {
+          if (gbpVal && trackerVal && gbpVal.trim().toLowerCase() !== trackerVal.trim().toLowerCase()) {
+            fieldDiffs.push({
+              store_code: code,
+              business_name: gbpLoc.business_name || trackerLoc.business_name,
+              field,
+              gbp_value: gbpVal,
+              tracker_value: trackerVal,
+            });
+          }
+        }
+
         if (gbpIsLive) ovConfirmed++;
         if (!gbpIsLive && trackerLoc.tracker_status === 'In Account') ouConfirmed++;
       } else {
@@ -77,7 +105,9 @@ export async function POST() {
       }
     }
 
-    const missingFromGbp = trackerLocations.filter((t) => t.store_code && !gbpCodes.has(t.store_code.trim().toUpperCase()));
+    const missingFromGbp = trackerLocations.filter(
+      (t) => t.store_code && !gbpCodes.has(t.store_code.trim().toUpperCase())
+    );
 
     const runResult = await db.execute({
       sql: `INSERT INTO reconciliation_runs
@@ -96,6 +126,15 @@ export async function POST() {
       ],
     });
 
+    await logAction('run_reconciliation', {
+      snapshotId: String(latestSnapshot.id),
+      totalGbp: gbpLocations.length,
+      matched,
+      missingFromTracker: missingFromTracker.length,
+      statusMismatches: statusMismatches.length,
+      fieldDiffs: fieldDiffs.length,
+    }, 'reconciliation_run', runResult.lastInsertRowid?.toString());
+
     return NextResponse.json({
       success: true,
       runId: runResult.lastInsertRowid?.toString(),
@@ -107,11 +146,13 @@ export async function POST() {
         ouConfirmed,
         missingFromTracker: missingFromTracker.length,
         statusMismatches: statusMismatches.length,
+        fieldDiffs: fieldDiffs.length,
       },
       details: {
         missingFromTracker: missingFromTracker.slice(0, 100),
         missingFromGbp: missingFromGbp.slice(0, 100),
         statusMismatches: statusMismatches.slice(0, 100),
+        fieldDiffs: fieldDiffs.slice(0, 200),
       },
     });
   } catch (error) {

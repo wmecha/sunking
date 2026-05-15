@@ -20,6 +20,7 @@ export async function initializeSchema(): Promise<void> {
 
   const db = getDb();
 
+  try {
   // Create all tables
   await db.batch([
     {
@@ -94,7 +95,18 @@ export async function initializeSchema(): Promise<void> {
       )`,
       args: [],
     },
-  ], 'deferred');
+    {
+      sql: `CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id TEXT,
+        details TEXT,
+        performed_at TEXT DEFAULT (datetime('now'))
+      )`,
+      args: [],
+    },
+  ], 'write');
 
   // Seed tracker data if empty
   const trackerCountResult = await db.execute('SELECT COUNT(*) as count FROM tracker_locations');
@@ -187,4 +199,10 @@ export async function initializeSchema(): Promise<void> {
   }
 
   initialized = true;
+  } catch (err) {
+    // Reset flags so the next request can retry initialization
+    initializing = false;
+    initialized = false;
+    throw err;
+  }
 }

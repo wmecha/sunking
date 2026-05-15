@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
+import { logAction } from '@/lib/audit';
 import Papa from 'papaparse';
 
 export async function GET() {
@@ -62,6 +63,14 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < locationStatements.length; i += chunkSize) {
       await db.batch(locationStatements.slice(i, i + chunkSize), 'write');
     }
+
+    await logAction('import_gbp_csv', {
+      filename: file.name,
+      total: rows.length,
+      published,
+      notPublished,
+      duplicate,
+    }, 'gbp_snapshot', snapshotId?.toString());
 
     return NextResponse.json({
       success: true,

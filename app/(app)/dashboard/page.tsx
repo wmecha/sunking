@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { TopBar } from '@/components/layout/TopBar';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { CountryChart } from '@/components/dashboard/CountryChart';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import {
@@ -14,6 +15,7 @@ import {
   GitCompare,
   Download,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface CountryBreakdown {
@@ -114,8 +116,16 @@ export default async function DashboardPage() {
           />
         </div>
 
+        {/* Country Chart */}
+        {data.countryBreakdown.length > 0 && (
+          <Card>
+            <CardHeader title="Location Distribution by Country" />
+            <CountryChart data={data.countryBreakdown} />
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Country Breakdown */}
+          {/* Country Breakdown Table */}
           <div className="xl:col-span-2">
             <Card padding={false}>
               <div className="px-6 py-4 border-b border-[#E5E7EB]">
@@ -215,6 +225,10 @@ export default async function DashboardPage() {
                 <Link href="/export" className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-[#374151] border border-[#E5E7EB] hover:bg-gray-50 hover:border-[#F5C000] transition-colors">
                   <Download size={16} className="text-[#F5C000]" />
                   Export CSV
+                </Link>
+                <Link href="/quality-control" className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-[#374151] border border-[#E5E7EB] hover:bg-gray-50 hover:border-[#F5C000] transition-colors">
+                  <ShieldCheck size={16} className="text-[#F5C000]" />
+                  Quality Control
                 </Link>
               </div>
             </Card>

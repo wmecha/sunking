@@ -44,6 +44,13 @@ interface ReconciliationDetails {
     gbp_status: string;
     tracker_status: string;
   }>;
+  fieldDiffs: Array<{
+    store_code: string;
+    business_name: string;
+    field: string;
+    gbp_value: string;
+    tracker_value: string;
+  }>;
 }
 
 interface RunResult {
@@ -55,6 +62,7 @@ interface RunResult {
     ouConfirmed: number;
     missingFromTracker: number;
     statusMismatches: number;
+    fieldDiffs: number;
   };
   details: ReconciliationDetails;
 }
@@ -74,7 +82,7 @@ export default function ReconciliationPage() {
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'missing_tracker' | 'missing_gbp' | 'mismatches'>('missing_tracker');
+  const [activeTab, setActiveTab] = useState<'missing_tracker' | 'missing_gbp' | 'mismatches' | 'field_diffs'>('missing_tracker');
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -175,6 +183,13 @@ export default function ReconciliationPage() {
                 accentColor="#DC2626"
                 icon={<XCircle size={20} />}
               />
+              {runResult && (
+                <MetricCard
+                  label="Field Diffs"
+                  value={runResult.metrics.fieldDiffs}
+                  accentColor="#7C3AED"
+                />
+              )}
             </div>
           </>
         )}
@@ -188,6 +203,7 @@ export default function ReconciliationPage() {
                 { key: 'missing_tracker' as const, label: `Missing from Tracker (${runResult.details.missingFromTracker.length})` },
                 { key: 'missing_gbp' as const, label: `Missing from GBP (${runResult.details.missingFromGbp.length})` },
                 { key: 'mismatches' as const, label: `Status Mismatches (${runResult.details.statusMismatches.length})` },
+              { key: 'field_diffs' as const, label: `Field Diffs (${runResult.details.fieldDiffs?.length ?? 0})` },
               ].map(({ key, label }) => (
                 <button
                   key={key}
@@ -252,6 +268,33 @@ export default function ReconciliationPage() {
                         <td className="px-4 py-3"><StatusBadge status={row.tracker_status} /></td>
                         <td className="px-4 py-3 text-gray-500">{row.city || '—'}</td>
                         <td className="px-4 py-3 text-gray-500">{row.country || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {activeTab === 'field_diffs' && (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-[#E5E7EB]">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Field</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">GBP Value</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tracker Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {!runResult.details.fieldDiffs?.length ? (
+                      <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No field differences found.</td></tr>
+                    ) : runResult.details.fieldDiffs.map((row, idx) => (
+                      <tr key={idx} className="border-b border-[#E5E7EB] hover:bg-gray-50">
+                        <td className="px-4 py-3 font-mono text-xs">{row.store_code}</td>
+                        <td className="px-4 py-3 font-medium text-[#1C2B3A] max-w-[160px] truncate">{row.business_name}</td>
+                        <td className="px-4 py-3 text-purple-700 font-medium text-xs">{row.field}</td>
+                        <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">{row.gbp_value}</td>
+                        <td className="px-4 py-3 text-amber-700 max-w-[180px] truncate">{row.tracker_value}</td>
                       </tr>
                     ))}
                   </tbody>

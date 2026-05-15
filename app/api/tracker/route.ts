@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
+import { logAction } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
   await initializeSchema();
@@ -82,6 +83,9 @@ export async function PUT(request: NextRequest) {
     });
 
     const updated = await db.execute({ sql: 'SELECT * FROM tracker_locations WHERE id = ?', args: [id] });
+
+    await logAction('edit_tracker_location', { fields: Object.fromEntries(entries) }, 'tracker_location', String(id));
+
     return NextResponse.json({ data: updated.rows[0] });
   } catch (error) {
     console.error('[tracker] PUT error:', error);
