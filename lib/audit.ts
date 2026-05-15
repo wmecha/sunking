@@ -10,7 +10,7 @@ export async function logAction(
     const db = getDb();
     await db.execute({
       sql: `INSERT INTO audit_logs (action, entity_type, entity_id, details, performed_at)
-            VALUES (?, ?, ?, ?, datetime('now'))`,
+            VALUES (?, ?, ?, ?, NOW())`,
       args: [
         action,
         entityType ?? null,

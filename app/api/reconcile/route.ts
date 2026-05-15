@@ -83,8 +83,8 @@ export async function POST() {
         // Field-level diff (name, city, country)
         const fieldChecks: Array<[string, string | undefined, string | undefined]> = [
           ['Business Name', gbpLoc.business_name, trackerLoc.business_name],
-          ['City', gbpLoc.city, trackerLoc.city],
-          ['Country', gbpLoc.country, trackerLoc.country],
+          ['City',          gbpLoc.city,          trackerLoc.city],
+          ['Country',       gbpLoc.country,        trackerLoc.country],
         ];
         for (const [field, gbpVal, trackerVal] of fieldChecks) {
           if (gbpVal && trackerVal && gbpVal.trim().toLowerCase() !== trackerVal.trim().toLowerCase()) {
@@ -112,9 +112,9 @@ export async function POST() {
     const runResult = await db.execute({
       sql: `INSERT INTO reconciliation_runs
               (run_at, snapshot_id, total_gbp, total_tracker, matched, ov_confirmed, ou_confirmed, missing_from_tracker, status_mismatches)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (NOW(), ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id`,
       args: [
-        new Date().toISOString(),
         latestSnapshot.id as number,
         gbpLocations.length,
         trackerLocations.length,
@@ -125,6 +125,7 @@ export async function POST() {
         statusMismatches.length,
       ],
     });
+    const runId = String(runResult.rows[0]?.id ?? '');
 
     await logAction('run_reconciliation', {
       snapshotId: String(latestSnapshot.id),
@@ -133,11 +134,11 @@ export async function POST() {
       missingFromTracker: missingFromTracker.length,
       statusMismatches: statusMismatches.length,
       fieldDiffs: fieldDiffs.length,
-    }, 'reconciliation_run', runResult.lastInsertRowid?.toString());
+    }, 'reconciliation_run', runId);
 
     return NextResponse.json({
       success: true,
-      runId: runResult.lastInsertRowid?.toString(),
+      runId,
       metrics: {
         totalGbp: gbpLocations.length,
         totalTracker: trackerLocations.length,
@@ -150,9 +151,9 @@ export async function POST() {
       },
       details: {
         missingFromTracker: missingFromTracker.slice(0, 100),
-        missingFromGbp: missingFromGbp.slice(0, 100),
-        statusMismatches: statusMismatches.slice(0, 100),
-        fieldDiffs: fieldDiffs.slice(0, 200),
+        missingFromGbp:     missingFromGbp.slice(0, 100),
+        statusMismatches:   statusMismatches.slice(0, 100),
+        fieldDiffs:         fieldDiffs.slice(0, 200),
       },
     });
   } catch (error) {

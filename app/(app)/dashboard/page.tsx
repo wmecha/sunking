@@ -6,7 +6,6 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { CountryChart } from '@/components/dashboard/CountryChart';
 import getDb from '@/lib/db';
-import { initializeSchema } from '@/lib/schema';
 import {
   MapPin,
   CheckCircle,
@@ -36,7 +35,6 @@ function formatDate(dateString: string) {
 }
 
 async function getDashboardData() {
-  await initializeSchema();
   const db = getDb();
 
   const [totalResult, liveResult, inAccountResult, needsResult, countryResult, snapshotResult, reconResult] =

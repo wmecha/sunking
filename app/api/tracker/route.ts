@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest) {
     if (entries.length === 0) return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
 
     const setClauses = entries.map(([key]) => `${key} = ?`);
-    setClauses.push("updated_at = datetime('now')");
+    setClauses.push('updated_at = NOW()');
     const values = entries.map(([, val]) => val as string);
 
     await db.execute({

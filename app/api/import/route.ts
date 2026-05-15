@@ -34,34 +34,38 @@ export async function POST(request: NextRequest) {
     const rows = parsed.data;
     if (rows.length === 0) return NextResponse.json({ error: 'CSV file is empty' }, { status: 400 });
 
-    const published = rows.filter((r) => r['Status']?.toLowerCase().trim() === 'published').length;
+    const published   = rows.filter((r) => r['Status']?.toLowerCase().trim() === 'published').length;
     const notPublished = rows.filter((r) => r['Status']?.toLowerCase().trim() === 'not published').length;
-    const duplicate = rows.filter((r) => r['Status']?.toLowerCase().trim() === 'duplicate').length;
+    const duplicate   = rows.filter((r) => r['Status']?.toLowerCase().trim() === 'duplicate').length;
 
+    // Insert snapshot and get back the new id
     const snapshotResult = await db.execute({
       sql: `INSERT INTO gbp_snapshots (filename, imported_at, total_count, published_count, not_published_count, duplicate_count)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [file.name, new Date().toISOString(), rows.length, published, notPublished, duplicate],
+            VALUES (?, NOW(), ?, ?, ?, ?)
+            RETURNING id`,
+      args: [file.name, rows.length, published, notPublished, duplicate],
     });
-    const snapshotId = snapshotResult.lastInsertRowid;
+    const snapshotId = snapshotResult.rows[0]?.id as number;
 
+    // Insert GBP location rows in chunks
     const locationStatements = rows.map((row) => ({
       sql: `INSERT INTO gbp_locations (snapshot_id, store_code, business_name, status, address, city, country)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT DO NOTHING`,
       args: [
         snapshotId,
-        row['Shop code'] || row['Store code'] || row['store_code'] || null,
+        row['Shop code']  || row['Store code']    || row['store_code']    || null,
         row['Business name'] || row['Business Name'] || row['business_name'] || null,
-        row['Status'] || null,
-        row['Address'] || row['address'] || null,
-        row['Locality'] || row['City'] || row['city'] || null,
-        row['Country/Region'] || row['Country'] || row['country'] || null,
-      ] as (string | number | bigint | null)[],
+        row['Status']     || null,
+        row['Address']    || row['address']        || null,
+        row['Locality']   || row['City']           || row['city']          || null,
+        row['Country/Region'] || row['Country']    || row['country']       || null,
+      ] as (string | number | null)[],
     }));
 
     const chunkSize = 500;
     for (let i = 0; i < locationStatements.length; i += chunkSize) {
-      await db.batch(locationStatements.slice(i, i + chunkSize), 'write');
+      await db.batch(locationStatements.slice(i, i + chunkSize));
     }
 
     await logAction('import_gbp_csv', {
@@ -70,11 +74,11 @@ export async function POST(request: NextRequest) {
       published,
       notPublished,
       duplicate,
-    }, 'gbp_snapshot', snapshotId?.toString());
+    }, 'gbp_snapshot', String(snapshotId));
 
     return NextResponse.json({
       success: true,
-      snapshotId: snapshotId?.toString(),
+      snapshotId: String(snapshotId),
       filename: file.name,
       total: rows.length,
       published,

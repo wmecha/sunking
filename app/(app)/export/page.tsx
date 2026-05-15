@@ -21,7 +21,7 @@ const COUNTRIES = [
 ];
 
 const STATUSES = ['Live', 'In Account', 'Submitted', 'Needs Pin', 'No Claim', 'Duplicate', 'Closed'];
-const LOCATION_TYPES = ['Flagship Store', 'Branch', 'Agent', 'Distributor'];
+const LOCATION_TYPES = ['Shop', 'Experience Centre', 'Warehouse', 'Head Office'];
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleString('en-GB', {

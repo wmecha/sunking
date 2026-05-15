@@ -3,11 +3,9 @@ export const dynamic = 'force-dynamic';
 import { TopBar } from '@/components/layout/TopBar';
 import { Card, CardHeader } from '@/components/ui/Card';
 import getDb from '@/lib/db';
-import { initializeSchema } from '@/lib/schema';
 import { Settings, Database, ShieldCheck, Info } from 'lucide-react';
 
 async function getSettingsData() {
-  await initializeSchema();
   const db = getDb();
 
   const [trackerCount, snapshotCount, gbpCount, reconCount, exportCount, auditCount] = await Promise.all([
@@ -66,7 +64,7 @@ export default async function SettingsPage() {
           <div>
             <StatRow label="Version" value="1.0.0" />
             <StatRow label="Framework" value="Next.js 14 (App Router)" />
-            <StatRow label="Database" value="SQLite via @libsql/client" />
+            <StatRow label="Database" value="PostgreSQL via Supabase" />
             <StatRow label="Deployment" value="Self-hosted / Node.js" />
           </div>
         </Card>

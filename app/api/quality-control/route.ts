@@ -11,11 +11,11 @@ export async function GET() {
   try {
     const [dupsResult, missingCodesResult, missingNamesResult, ovouConflictResult, noStatusResult, latestSnapshotResult] =
       await Promise.all([
-        // Duplicate store codes
+        // Duplicate store codes (STRING_AGG replaces SQLite GROUP_CONCAT)
         db.execute(`
           SELECT store_code, COUNT(*) as count,
-            GROUP_CONCAT(business_name, ' | ') as names,
-            GROUP_CONCAT(country, ' | ') as countries
+            STRING_AGG(business_name, ' | ') as names,
+            STRING_AGG(country, ' | ') as countries
           FROM tracker_locations
           WHERE store_code IS NOT NULL AND store_code != ''
           GROUP BY UPPER(TRIM(store_code))
@@ -40,7 +40,7 @@ export async function GET() {
         db.execute(`
           SELECT id, store_code, business_name, country, ov, ou, tracker_status
           FROM tracker_locations
-          WHERE (UPPER(ov) = 'TRUE') AND (UPPER(ou) = 'TRUE')
+          WHERE UPPER(ov) = 'TRUE' AND UPPER(ou) = 'TRUE'
           ORDER BY country, business_name
         `),
         // No tracker status set
@@ -59,9 +59,11 @@ export async function GET() {
       const snapshotId = latestSnapshotResult.rows[0].id;
       const conflictResult = await db.execute({
         sql: `
-          SELECT t.id, t.store_code, t.business_name, t.tracker_status, g.status as gbp_status, t.country, t.city
+          SELECT t.id, t.store_code, t.business_name, t.tracker_status,
+                 g.status as gbp_status, t.country, t.city
           FROM tracker_locations t
-          JOIN gbp_locations g ON UPPER(TRIM(t.store_code)) = UPPER(TRIM(g.store_code))
+          JOIN gbp_locations g
+            ON UPPER(TRIM(t.store_code)) = UPPER(TRIM(g.store_code))
           WHERE g.snapshot_id = ?
             AND LOWER(g.status) = 'published'
             AND t.tracker_status != 'Live'
@@ -83,19 +85,19 @@ export async function GET() {
     return NextResponse.json({
       summary: {
         total: totalIssues,
-        duplicateStoreCodes: dupsResult.rows.length,
-        missingStoreCodes: missingCodesResult.rows.length,
+        duplicateStoreCodes:  dupsResult.rows.length,
+        missingStoreCodes:    missingCodesResult.rows.length,
         missingBusinessNames: missingNamesResult.rows.length,
-        ovouConflicts: ovouConflictResult.rows.length,
-        noStatus: noStatusResult.rows.length,
-        gbpStatusConflicts: gbpConflicts.length,
+        ovouConflicts:        ovouConflictResult.rows.length,
+        noStatus:             noStatusResult.rows.length,
+        gbpStatusConflicts:   gbpConflicts.length,
       },
-      duplicateStoreCodes: dupsResult.rows,
-      missingStoreCodes: missingCodesResult.rows,
+      duplicateStoreCodes:  dupsResult.rows,
+      missingStoreCodes:    missingCodesResult.rows,
       missingBusinessNames: missingNamesResult.rows,
-      ovouConflicts: ovouConflictResult.rows,
-      noStatus: noStatusResult.rows,
-      gbpStatusConflicts: gbpConflicts,
+      ovouConflicts:        ovouConflictResult.rows,
+      noStatus:             noStatusResult.rows,
+      gbpStatusConflicts:   gbpConflicts,
     });
   } catch (error) {
     console.error('[quality-control] GET error:', error);

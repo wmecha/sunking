@@ -62,8 +62,8 @@ export async function GET(request: NextRequest) {
 
     await db.execute({
       sql: `INSERT INTO export_history (exported_at, filename, filter_country, filter_status, row_count)
-            VALUES (?, ?, ?, ?, ?)`,
-      args: [new Date().toISOString(), filename, country || null, status || null, rows.length],
+            VALUES (NOW(), ?, ?, ?, ?)`,
+      args: [filename, country || null, status || null, rows.length],
     });
 
     return new NextResponse(csv, {
