@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Search, ChevronLeft, ChevronRight, Download, Pencil, CheckCircle } from 'lucide-react';
 import type { TrackerLocation } from '@/lib/types';
+import { PhotoUploader } from '@/components/tracker/PhotoUploader';
 
 interface TrackerResponse {
   data: TrackerLocation[];
@@ -311,9 +312,9 @@ export function TrackerTable() {
       )}
 
       {/* Edit Modal */}
-      <Modal open={!!editingRow} onClose={() => setEditingRow(null)} title={`Edit — ${editingRow?.business_name || editingRow?.store_code || 'Location'}`} width="lg">
+      <Modal open={!!editingRow} onClose={() => setEditingRow(null)} title={`Edit — ${editingRow?.business_name || editingRow?.store_code || 'Location'}`} width="xl">
         {editingRow && (
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Store Code</label>
@@ -418,6 +419,23 @@ export function TrackerTable() {
                 />
               </div>
             </div>
+
+            {/* Photos */}
+            {editForm.store_code && (
+              <div className="pt-4 border-t border-[#E5E7EB]">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[#1C2B3A]">Photos</h3>
+                  <span className="text-[11px] text-gray-400">Uploads save immediately</span>
+                </div>
+                <PhotoUploader
+                  storeCode={editForm.store_code}
+                  logoUrl={editForm.logo_photo_url}
+                  coverUrl={editForm.cover_photo_url}
+                  otherUrls={Array.isArray(editForm.other_photo_urls) ? editForm.other_photo_urls : []}
+                  onChange={(next) => setEditForm((f) => ({ ...f, ...next }))}
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E5E7EB]">
               <Button variant="secondary" onClick={() => setEditingRow(null)}>Cancel</Button>

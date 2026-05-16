@@ -35,7 +35,25 @@ export interface TrackerLocation {
   address?: string;
   city?: string;
   tracker_status?: string;
+  // Photo URLs (Supabase Storage public URLs)
+  logo_photo_url?: string | null;
+  cover_photo_url?: string | null;
+  other_photo_urls?: string[] | null;
+  // Google Bulk Upload fields
+  latitude?: number | null;
+  longitude?: number | null;
+  primary_phone?: string | null;
+  website?: string | null;
+  primary_category?: string | null;
+  monday_hours?: string | null;
+  tuesday_hours?: string | null;
+  wednesday_hours?: string | null;
+  thursday_hours?: string | null;
+  friday_hours?: string | null;
+  saturday_hours?: string | null;
+  sunday_hours?: string | null;
   updated_at?: string;
+  sheet_synced_at?: string | null;
 }
 
 export interface ReconciliationRun {

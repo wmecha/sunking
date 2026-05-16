@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  width?: 'sm' | 'md' | 'lg';
+  width?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export function Modal({ open, onClose, title, children, width = 'md' }: ModalProps) {
@@ -23,7 +23,7 @@ export function Modal({ open, onClose, title, children, width = 'md' }: ModalPro
 
   if (!open) return null;
 
-  const widthClass = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }[width];
+  const widthClass = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' }[width];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
