@@ -16,12 +16,12 @@ interface ExportHistoryRow {
 }
 
 const COUNTRIES = [
-  'Kenya', 'Uganda', 'Tanzania', 'Ghana', 'Nigeria', 'Rwanda',
-  'Ethiopia', 'Zambia', 'Malawi', 'DR Congo', 'Senegal',
+  'Benin', 'Cameroon', 'Kenya', 'Malawi', 'Mozambique', 'Nigeria',
+  'South Africa', 'Tanzania', 'Togo', 'Uganda', 'Zambia',
 ];
 
 const STATUSES = ['Live', 'In Account', 'Submitted', 'Needs Pin', 'No Claim', 'Duplicate', 'Closed'];
-const LOCATION_TYPES = ['Shop', 'Experience Centre', 'Warehouse', 'Head Office'];
+const LOCATION_TYPES = ['Shop', 'Store', 'Experience Centre', 'Warehouse', 'Head Office', 'LPG Depot'];
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleString('en-GB', {
@@ -95,12 +95,13 @@ export default function ExportPage() {
     );
   }
 
-  function handleDownload() {
+  function handleDownload(format: 'tracker' | 'google-bulk' = 'tracker') {
     const params = new URLSearchParams();
     if (selectedCountries.length > 0) params.set('country', selectedCountries.join(','));
     if (status) params.set('status', status);
     if (locationType) params.set('location_type', locationType);
-    window.location.href = `/api/export?${params}`;
+    const path = format === 'google-bulk' ? '/api/export/google-bulk' : '/api/export';
+    window.location.href = `${path}?${params}`;
 
     // Refresh history after a short delay to show the new export
     setTimeout(fetchHistory, 1500);
@@ -213,21 +214,42 @@ export default function ExportPage() {
                 {locationType && <span> · Type: <span className="text-[#1C2B3A]">{locationType}</span></span>}
               </div>
 
-              {/* Download Button */}
-              <Button
-                onClick={handleDownload}
-                disabled={previewCount === 0}
-                size="lg"
-                className="w-full justify-center"
-              >
-                <Download size={18} />
-                Download CSV ({previewCount ?? '...'} locations)
-              </Button>
+              {/* Download Buttons */}
+              <div className="space-y-2">
+                <Button
+                  onClick={() => handleDownload('tracker')}
+                  disabled={previewCount === 0}
+                  size="lg"
+                  className="w-full justify-center"
+                >
+                  <Download size={18} />
+                  Download Tracker CSV ({previewCount ?? '...'} locations)
+                </Button>
+                <Button
+                  onClick={() => handleDownload('google-bulk')}
+                  disabled={previewCount === 0}
+                  variant="secondary"
+                  size="lg"
+                  className="w-full justify-center"
+                >
+                  <Download size={18} />
+                  Download Google Bulk Upload CSV
+                </Button>
+              </div>
 
               {/* Format note */}
-              <p className="text-xs text-gray-400 mt-3 text-center">
-                Output columns: Status, Store Code, Business Name, Address, Locality, Country/Region, Location Type, OV Status, OU Status, Claiming Issue, Action Taken
-              </p>
+              <div className="text-xs text-gray-400 mt-3 space-y-1">
+                <p>
+                  <span className="font-medium text-gray-500">Tracker CSV:</span> internal columns
+                  (Status, Store Code, Business Name, Address, Locality, Country/Region, Location Type,
+                  OV/OU Status, Claiming Issue, Action Taken).
+                </p>
+                <p>
+                  <span className="font-medium text-gray-500">Google Bulk Upload CSV:</span> Google&apos;s
+                  34-column template with Logo / Cover / Other photo URLs auto-filled from uploaded photos.
+                  Country shown as ISO 2-letter code (e.g. KE, NG, ZA).
+                </p>
+              </div>
             </Card>
           </div>
         </div>
