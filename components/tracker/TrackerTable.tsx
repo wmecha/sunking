@@ -265,7 +265,22 @@ export function TrackerTable() {
                 data.map((row) => (
                   <tr key={row.id} className="border-b border-[#E5E7EB] hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-[#374151] whitespace-nowrap">{row.store_code || '—'}</td>
-                    <td className="px-4 py-3 text-[#1C2B3A] font-medium max-w-[200px] truncate">{row.business_name || '—'}</td>
+                    <td className="px-4 py-3 max-w-[220px]">
+                      {row.business_name ? (
+                        <a
+                          href={googleMapsUrl(row)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-medium text-[#1C2B3A] hover:text-blue-600 hover:underline transition-colors truncate inline-block max-w-full align-bottom"
+                          title="Open in Google Maps"
+                        >
+                          {row.business_name}
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-[#374151] whitespace-nowrap">{row.country || '—'}</td>
                     <td className="px-4 py-3 text-[#374151] whitespace-nowrap">{row.city || '—'}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.location_type || '—'}</td>

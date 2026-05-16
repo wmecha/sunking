@@ -93,8 +93,14 @@ export async function pushAllToSheet(): Promise<{ pushed: number }> {
 
   // GOOGLESHEETS_UPSERT_ROWS matches by keyColumn (Store Code) and updates existing rows or appends new ones.
   // Auto-handles header creation if the sheet is empty.
+  // dangerouslySkipVersionCheck: true acknowledges that we're using the SDK-level
+  // toolkitVersions: 'latest' setting — without this, the SDK throws
+  // ComposioToolVersionRequiredError ("Toolkit version not specified") when it
+  // resolves the toolkit version to 'latest' for a "manual execution" caller.
   await composio.tools.execute('GOOGLESHEETS_UPSERT_ROWS', {
     userId,
+    version: 'latest',
+    dangerouslySkipVersionCheck: true,
     arguments: {
       spreadsheetId: SHEET_ID,
       sheetName: SHEET_TAB,
@@ -130,9 +136,11 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
   const db = getDb();
 
   // Read the sheet. Use a bounded range so this doesn't drag on giant sheets.
-  // 'Master Tracker'!A1:Z2000 covers 11 columns × up to 2000 rows comfortably.
+  // Master Tracker has Google Maps Link at column V, so we read A1:Z to be safe.
   const sheetResp = await composio.tools.execute('GOOGLESHEETS_BATCH_GET', {
     userId,
+    version: 'latest',
+    dangerouslySkipVersionCheck: true,
     arguments: {
       spreadsheet_id: SHEET_ID,
       ranges: [`'${SHEET_TAB}'!A1:Z2000`],
