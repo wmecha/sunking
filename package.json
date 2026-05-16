@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@composio/core": "^0.10.0",
+    "@googlemaps/js-api-loader": "^2.0.2",
+    "@googlemaps/markerclusterer": "^2.6.2",
     "@types/papaparse": "^5.3.14",
     "iron-session": "^8.0.3",
     "lucide-react": "^0.378.0",

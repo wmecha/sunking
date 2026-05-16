@@ -5,20 +5,23 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { isSyncEnabled } from '@/lib/composio';
+import { isGeocodingEnabled } from '@/lib/geocode';
 import { SyncPanel } from '@/components/settings/SyncPanel';
-import { Settings, Database, ShieldCheck, Info, RefreshCw } from 'lucide-react';
+import { GeocodePanel } from '@/components/settings/GeocodePanel';
+import { Settings, Database, ShieldCheck, Info, RefreshCw, Map } from 'lucide-react';
 
 async function getSettingsData() {
   await initializeSchema();
   const db = getDb();
 
-  const [trackerCount, snapshotCount, gbpCount, reconCount, exportCount, auditCount] = await Promise.all([
+  const [trackerCount, snapshotCount, gbpCount, reconCount, exportCount, auditCount, missingCoordsResult] = await Promise.all([
     db.execute('SELECT COUNT(*) as n FROM tracker_locations'),
     db.execute('SELECT COUNT(*) as n FROM gbp_snapshots'),
     db.execute('SELECT COUNT(*) as n FROM gbp_locations'),
     db.execute('SELECT COUNT(*) as n FROM reconciliation_runs'),
     db.execute('SELECT COUNT(*) as n FROM export_history'),
     db.execute('SELECT COUNT(*) as n FROM audit_logs'),
+    db.execute('SELECT COUNT(*) as n FROM tracker_locations WHERE latitude IS NULL'),
   ]);
 
   const latestSnapshot = await db.execute(
@@ -33,6 +36,7 @@ async function getSettingsData() {
       reconciliations: Number(reconCount.rows[0]?.n ?? 0),
       exports: Number(exportCount.rows[0]?.n ?? 0),
       auditLogs: Number(auditCount.rows[0]?.n ?? 0),
+      missingCoords: Number(missingCoordsResult.rows[0]?.n ?? 0),
     },
     latestSnapshot: latestSnapshot.rows[0] as Record<string, unknown> | undefined,
   };
@@ -50,6 +54,7 @@ function StatRow({ label, value }: { label: string; value: number | string }) {
 export default async function SettingsPage() {
   const data = await getSettingsData();
   const syncEnabled = isSyncEnabled();
+  const geocodingEnabled = isGeocodingEnabled();
   const sheetId = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
   const sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : null;
 
@@ -69,6 +74,20 @@ export default async function SettingsPage() {
             Push overwrites the sheet from the DB; Pull reads the sheet and applies field-level updates.
           </p>
           <SyncPanel syncEnabled={syncEnabled} sheetUrl={sheetUrl} />
+        </Card>
+
+        {/* Bulk Geocoding */}
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Map size={18} className="text-[#F5C000]" />
+            <h2 className="text-base font-semibold text-[#1C2B3A]">Bulk Geocode Addresses</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Fills <code className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">latitude</code> and
+            {' '}<code className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">longitude</code> on
+            tracker rows using Google&apos;s Geocoding API. Required before locations show up on the Map page.
+          </p>
+          <GeocodePanel enabled={geocodingEnabled} initialRemaining={data.counts.missingCoords} />
         </Card>
 
         {/* App Info */}

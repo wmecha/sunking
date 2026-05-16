@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   MapPin,
+  Map,
   Upload,
   GitCompare,
   Download,
@@ -21,6 +22,7 @@ import {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tracker', label: 'Tracker', icon: MapPin },
+  { href: '/map', label: 'Map', icon: Map },
   { href: '/import', label: 'Import', icon: Upload },
   { href: '/reconciliation', label: 'Reconciliation', icon: GitCompare },
   { href: '/export', label: 'Export', icon: Download },
