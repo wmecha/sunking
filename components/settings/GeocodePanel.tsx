@@ -14,7 +14,50 @@ interface BatchResult {
   failed: number;
   skipped: number;
   remaining: number;
-  samples?: Array<{ store_code: string; query: string; ok: boolean; formatted?: string }>;
+  samples?: Array<{
+    store_code: string;
+    query: string;
+    ok: boolean;
+    formatted?: string;
+    error_status?: string;
+    error_message?: string;
+  }>;
+  error_summary?: { counts: Record<string, number>; first_message?: string };
+}
+
+function explainError(status: string): { title: string; fix: string } {
+  switch (status) {
+    case 'REQUEST_DENIED':
+      return {
+        title: 'Google denied the request (REQUEST_DENIED).',
+        fix: 'Most likely causes: (1) Geocoding API is not enabled in your Google Cloud project — go to APIs & Services → Library → enable "Geocoding API". (2) Billing is not enabled on the project — required even within the $200 free credit. (3) The API key has HTTP referrer restrictions, which break server-side calls; switch to "IP addresses" or "None" for this key, OR create a separate server-side key.',
+      };
+    case 'OVER_QUERY_LIMIT':
+      return {
+        title: 'Quota exceeded (OVER_QUERY_LIMIT).',
+        fix: 'Wait a few seconds and retry. If it persists, check your daily quota in Google Cloud Console.',
+      };
+    case 'ZERO_RESULTS':
+      return {
+        title: 'Google could not match these addresses.',
+        fix: 'These specific addresses are too vague for Google to locate. Refine the address text in the Tracker (add city/landmark) and re-run.',
+      };
+    case 'INVALID_REQUEST':
+      return {
+        title: 'Invalid request shape.',
+        fix: 'A bug on our side — query string is malformed. Capture the failing rows and let me know.',
+      };
+    case 'NETWORK_ERROR':
+      return {
+        title: 'Network call to Google failed.',
+        fix: 'Likely a transient network issue from Vercel’s region. Retry once. If it persists, check Vercel function logs.',
+      };
+    default:
+      return {
+        title: `Google returned status: ${status}`,
+        fix: 'Check the full message below and the Vercel function logs.',
+      };
+  }
 }
 
 export function GeocodePanel({ enabled, initialRemaining }: GeocodePanelProps) {
@@ -115,6 +158,35 @@ export function GeocodePanel({ enabled, initialRemaining }: GeocodePanelProps) {
         </div>
       )}
 
+      {lastResult?.error_summary && (
+        (() => {
+          const topStatus = Object.entries(lastResult.error_summary.counts)
+            .sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'UNKNOWN';
+          const explained = explainError(topStatus);
+          return (
+            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-md text-sm">
+              <AlertTriangle size={18} className="text-red-700 mt-0.5 flex-shrink-0" />
+              <div className="space-y-1">
+                <p className="font-semibold text-red-900">{explained.title}</p>
+                <p className="text-red-800 text-xs">{explained.fix}</p>
+                {lastResult.error_summary.first_message && (
+                  <p className="text-xs text-red-700 mt-1">
+                    <span className="font-semibold">Google said:</span>{' '}
+                    <span className="font-mono">{lastResult.error_summary.first_message}</span>
+                  </p>
+                )}
+                <p className="text-[11px] text-red-700 mt-1">
+                  Breakdown:{' '}
+                  {Object.entries(lastResult.error_summary.counts).map(([k, v]) => (
+                    <code key={k} className="font-mono mr-2">{k}={v}</code>
+                  ))}
+                </p>
+              </div>
+            </div>
+          );
+        })()
+      )}
+
       {lastResult && (
         <div className="text-xs text-gray-500 space-y-2">
           <p>
@@ -134,6 +206,9 @@ export function GeocodePanel({ enabled, initialRemaining }: GeocodePanelProps) {
                     <span className="text-gray-700">{s.query}</span>
                     {s.formatted && (
                       <div className="ml-4 text-gray-500">→ {s.formatted}</div>
+                    )}
+                    {s.error_status && (
+                      <div className="ml-4 text-red-700">{s.error_status}{s.error_message ? `: ${s.error_message}` : ''}</div>
                     )}
                   </li>
                 ))}

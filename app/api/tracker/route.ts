@@ -69,6 +69,9 @@ export async function PUT(request: NextRequest) {
     const allowedFields = [
       'store_code', 'business_name', 'country', 'location_type',
       'ov', 'ou', 'claiming_issue', 'action_taken', 'address', 'city', 'tracker_status',
+      'latitude', 'longitude', 'primary_phone', 'website', 'primary_category',
+      'monday_hours', 'tuesday_hours', 'wednesday_hours', 'thursday_hours',
+      'friday_hours', 'saturday_hours', 'sunday_hours',
     ];
 
     const entries = Object.entries(fields).filter(([key]) => allowedFields.includes(key));
@@ -76,7 +79,11 @@ export async function PUT(request: NextRequest) {
 
     const setClauses = entries.map(([key]) => `${key} = ?`);
     setClauses.push('updated_at = NOW()');
-    const values = entries.map(([, val]) => val as string);
+    const values = entries.map(([, val]) => {
+      // Convert empty strings to null for nullable numeric cols, pass others through.
+      if (val === '') return null;
+      return val as string | number | null;
+    });
 
     await db.execute({
       sql: `UPDATE tracker_locations SET ${setClauses.join(', ')} WHERE id = ?`,

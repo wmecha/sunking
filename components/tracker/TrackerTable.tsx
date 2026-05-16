@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Search, ChevronLeft, ChevronRight, Download, Pencil, CheckCircle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Download, Pencil, CheckCircle, MapPin, ExternalLink } from 'lucide-react';
 import type { TrackerLocation } from '@/lib/types';
 import { PhotoUploader } from '@/components/tracker/PhotoUploader';
+import { googleMapsUrl, hasCoords } from '@/lib/maps-url';
 
 interface TrackerResponse {
   data: TrackerLocation[];
@@ -281,14 +282,30 @@ export function TrackerTable() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusBadge status={row.tracker_status || 'Unknown'} />
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={(e) => openEdit(row, e)}
-                        className="p-1 text-gray-400 hover:text-[#1C2B3A] rounded transition-colors"
-                        title="Edit location"
-                      >
-                        <Pencil size={13} />
-                      </button>
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <div className="inline-flex items-center gap-0.5">
+                        <a
+                          href={googleMapsUrl(row)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className={`p-1 rounded transition-colors ${
+                            hasCoords(row)
+                              ? 'text-[#F5C000] hover:text-yellow-600 hover:bg-yellow-50'
+                              : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'
+                          }`}
+                          title={hasCoords(row) ? 'Open in Google Maps (pinned)' : 'Open in Google Maps (search by address)'}
+                        >
+                          <MapPin size={13} />
+                        </a>
+                        <button
+                          onClick={(e) => openEdit(row, e)}
+                          className="p-1 text-gray-400 hover:text-[#1C2B3A] rounded transition-colors"
+                          title="Edit location"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -418,6 +435,58 @@ export function TrackerTable() {
                   onChange={(e) => setEditForm((f) => ({ ...f, action_taken: e.target.value }))}
                 />
               </div>
+            </div>
+
+            {/* Google Maps + Coordinates */}
+            <div className="pt-4 border-t border-[#E5E7EB]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-[#1C2B3A] flex items-center gap-1.5">
+                  <MapPin size={14} className="text-[#F5C000]" /> Google Maps & Coordinates
+                </h3>
+                <a
+                  href={googleMapsUrl(editForm)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-[#1C2B3A] hover:text-[#F5C000] inline-flex items-center gap-1 border border-[#E5E7EB] hover:border-[#F5C000] rounded px-2.5 py-1 transition-colors"
+                >
+                  <ExternalLink size={12} /> Open in Google Maps
+                </a>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Latitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="input-field font-mono text-xs"
+                    placeholder="e.g. -1.2921"
+                    value={editForm.latitude ?? ''}
+                    onChange={(e) => setEditForm((f) => ({
+                      ...f,
+                      latitude: e.target.value === '' ? null : Number(e.target.value),
+                    }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Longitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    className="input-field font-mono text-xs"
+                    placeholder="e.g. 36.8219"
+                    value={editForm.longitude ?? ''}
+                    onChange={(e) => setEditForm((f) => ({
+                      ...f,
+                      longitude: e.target.value === '' ? null : Number(e.target.value),
+                    }))}
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-2">
+                {hasCoords(editForm)
+                  ? 'The Maps link uses these exact coordinates. Edit to refine the pin position.'
+                  : 'Maps link will search by address. Click "Geocode all" in Settings to auto-fill coords, or paste from Google Maps (right-click → "What\'s here?").'}
+              </p>
             </div>
 
             {/* Photos */}

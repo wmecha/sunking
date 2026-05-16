@@ -50,7 +50,17 @@ export async function POST(request: NextRequest) {
     let succeeded = 0;
     let failed = 0;
     let skipped = 0;
-    const samples: Array<{ store_code: string; query: string; ok: boolean; formatted?: string }> = [];
+    const samples: Array<{
+      store_code: string;
+      query: string;
+      ok: boolean;
+      formatted?: string;
+      error_status?: string;
+      error_message?: string;
+    }> = [];
+    // Track top error to surface to the user (most useful when ALL fail).
+    const errorCounts: Record<string, number> = {};
+    let firstErrorMessage: string | undefined;
 
     for (const row of rows) {
       const query = buildGeocodeQuery(row);
@@ -59,25 +69,38 @@ export async function POST(request: NextRequest) {
         continue;
       }
       try {
-        const result = await geocodeAddress(query, row.country);
-        if (!result) {
+        const r = await geocodeAddress(query, row.country);
+        if (!r.ok) {
           failed++;
-          if (samples.length < 5) samples.push({ store_code: row.store_code, query, ok: false });
+          errorCounts[r.error.status] = (errorCounts[r.error.status] ?? 0) + 1;
+          if (!firstErrorMessage && r.error.message) firstErrorMessage = r.error.message;
+          if (samples.length < 5) {
+            samples.push({
+              store_code: row.store_code,
+              query,
+              ok: false,
+              error_status: r.error.status,
+              error_message: r.error.message,
+            });
+          }
           continue;
         }
         await db.execute({
           sql: `UPDATE tracker_locations
                 SET latitude = ?, longitude = ?
                 WHERE id = ? AND latitude IS NULL`,
-          args: [result.latitude, result.longitude, row.id],
+          args: [r.result.latitude, r.result.longitude, row.id],
         });
         succeeded++;
         if (samples.length < 5) {
-          samples.push({ store_code: row.store_code, query, ok: true, formatted: result.formatted_address });
+          samples.push({ store_code: row.store_code, query, ok: true, formatted: r.result.formatted_address });
         }
-      } catch {
+      } catch (e) {
         failed++;
-        if (samples.length < 5) samples.push({ store_code: row.store_code, query, ok: false });
+        const msg = e instanceof Error ? e.message : 'Exception';
+        errorCounts['EXCEPTION'] = (errorCounts['EXCEPTION'] ?? 0) + 1;
+        if (!firstErrorMessage) firstErrorMessage = msg;
+        if (samples.length < 5) samples.push({ store_code: row.store_code, query, ok: false, error_status: 'EXCEPTION', error_message: msg });
       }
     }
 
@@ -86,7 +109,15 @@ export async function POST(request: NextRequest) {
     );
     const remaining = Number(remainingResp.rows[0]?.n ?? 0);
 
-    await logAction('geocode_batch', { processed: rows.length, succeeded, failed, skipped, remaining });
+    await logAction('geocode_batch', {
+      processed: rows.length,
+      succeeded,
+      failed,
+      skipped,
+      remaining,
+      errorCounts,
+      firstErrorMessage,
+    });
 
     return NextResponse.json({
       processed: rows.length,
@@ -95,6 +126,7 @@ export async function POST(request: NextRequest) {
       skipped,
       remaining,
       samples,
+      error_summary: failed > 0 ? { counts: errorCounts, first_message: firstErrorMessage } : undefined,
     });
   } catch (error) {
     console.error('[geocode/batch] error:', error);
