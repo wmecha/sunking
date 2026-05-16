@@ -57,7 +57,10 @@ export async function POST() {
     let ouConfirmed = 0;
     const missingFromTracker: typeof gbpLocations = [];
     const statusMismatches: Array<{
-      store_code: string; business_name: string; gbp_status: string; tracker_status: string;
+      store_code: string; business_name: string;
+      gbp_status: string; tracker_status: string;
+      direction: 'gbp_ahead' | 'tracker_ahead';
+      suggested_tracker_status: string; // what tracker SHOULD say to match GBP
     }> = [];
     const fieldDiffs: Array<{
       store_code: string; business_name: string; field: string; gbp_value: string; tracker_value: string;
@@ -68,15 +71,35 @@ export async function POST() {
       if (trackerCodes.has(code)) {
         matched++;
         const trackerLoc = trackerCodes.get(code)!;
-        const gbpIsLive = gbpLoc.status?.toLowerCase().trim() === 'published';
+        const gbpStatusLower = gbpLoc.status?.toLowerCase().trim() ?? '';
+        const gbpIsLive = gbpStatusLower === 'published';
         const trackerIsLive = trackerLoc.tracker_status === 'Live';
 
+        // Direction 1 — GBP says published, tracker doesn't yet
         if (gbpIsLive && !trackerIsLive) {
           statusMismatches.push({
             store_code: code,
             business_name: gbpLoc.business_name || trackerLoc.business_name,
             gbp_status: gbpLoc.status,
             tracker_status: trackerLoc.tracker_status,
+            direction: 'gbp_ahead',
+            suggested_tracker_status: 'Live',
+          });
+        }
+
+        // Direction 2 — tracker says Live but GBP says otherwise (dangerous: we're overstating)
+        if (trackerIsLive && !gbpIsLive && gbpStatusLower !== '') {
+          const suggested =
+            gbpStatusLower === 'duplicate' ? 'Duplicate'
+            : gbpStatusLower === 'not published' ? 'In Account'
+            : 'In Account';
+          statusMismatches.push({
+            store_code: code,
+            business_name: gbpLoc.business_name || trackerLoc.business_name,
+            gbp_status: gbpLoc.status,
+            tracker_status: trackerLoc.tracker_status,
+            direction: 'tracker_ahead',
+            suggested_tracker_status: suggested,
           });
         }
 

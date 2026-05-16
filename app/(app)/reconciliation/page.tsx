@@ -44,6 +44,8 @@ interface ReconciliationDetails {
     business_name: string;
     gbp_status: string;
     tracker_status: string;
+    direction: 'gbp_ahead' | 'tracker_ahead';
+    suggested_tracker_status: string;
   }>;
   fieldDiffs: Array<{
     store_code: string;
@@ -86,6 +88,9 @@ export default function ReconciliationPage() {
   const [activeTab, setActiveTab] = useState<'missing_tracker' | 'missing_gbp' | 'mismatches' | 'field_diffs'>('missing_tracker');
   const [hasSnapshot, setHasSnapshot] = useState<boolean | null>(null); // null = loading
   const [showUpload, setShowUpload] = useState(false);
+  const [appliedCodes, setAppliedCodes] = useState<Set<string>>(new Set());
+  const [applyingAll, setApplyingAll] = useState(false);
+  const [applyResult, setApplyResult] = useState<{ applied: number; errors: number } | null>(null);
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -127,6 +132,8 @@ export default function ReconciliationPage() {
     setRunning(true);
     setError('');
     setRunResult(null);
+    setAppliedCodes(new Set());
+    setApplyResult(null);
 
     try {
       const res = await fetch('/api/reconcile', { method: 'POST' });
@@ -143,6 +150,52 @@ export default function ReconciliationPage() {
       setError('Network error. Please try again.');
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function applyMismatchUpdates(
+    rows: Array<{ store_code: string; suggested_tracker_status: string }>,
+  ) {
+    if (rows.length === 0) return;
+    setApplyResult(null);
+    try {
+      const res = await fetch('/api/reconcile/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: rows.map((r) => ({
+            store_code: r.store_code,
+            tracker_status: r.suggested_tracker_status,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Apply failed');
+      setAppliedCodes((prev) => {
+        const next = new Set(prev);
+        for (const r of rows) next.add(r.store_code);
+        return next;
+      });
+      setApplyResult({ applied: json.applied, errors: (json.errors ?? []).length });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Apply failed');
+    }
+  }
+
+  async function handleApplyOne(row: { store_code: string; suggested_tracker_status: string }) {
+    await applyMismatchUpdates([row]);
+  }
+
+  async function handleApplyAllSuggested() {
+    if (!runResult) return;
+    const pending = runResult.details.statusMismatches.filter((r) => !appliedCodes.has(r.store_code));
+    if (pending.length === 0) return;
+    if (!confirm(`Apply ${pending.length} suggested tracker_status updates from this GBP snapshot?`)) return;
+    setApplyingAll(true);
+    try {
+      await applyMismatchUpdates(pending);
+    } finally {
+      setApplyingAll(false);
     }
   }
 
@@ -360,28 +413,82 @@ export default function ReconciliationPage() {
               )}
 
               {activeTab === 'mismatches' && (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-[#E5E7EB]">
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">GBP Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tracker Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runResult.details.statusMismatches.length === 0 ? (
-                      <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">No status mismatches found.</td></tr>
-                    ) : runResult.details.statusMismatches.map((row, idx) => (
-                      <tr key={idx} className="border-b border-[#E5E7EB] hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-xs">{row.store_code}</td>
-                        <td className="px-4 py-3 font-medium text-[#1C2B3A]">{row.business_name}</td>
-                        <td className="px-4 py-3"><StatusBadge status={row.gbp_status} /></td>
-                        <td className="px-4 py-3"><StatusBadge status={row.tracker_status} /></td>
+                <>
+                  {/* Apply-all banner */}
+                  {runResult.details.statusMismatches.length > 0 && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
+                      <p className="text-sm text-amber-900">
+                        <strong>{runResult.details.statusMismatches.length}</strong> status mismatch(es) between GBP and Tracker.
+                        Each row shows the suggested Tracker status to match what Google says.
+                      </p>
+                      <Button
+                        size="sm"
+                        onClick={handleApplyAllSuggested}
+                        loading={applyingAll}
+                        disabled={runResult.details.statusMismatches.every((r) => appliedCodes.has(r.store_code))}
+                      >
+                        Apply all suggested
+                      </Button>
+                    </div>
+                  )}
+                  {applyResult && (
+                    <div className="px-4 py-2 bg-green-50 border-b border-green-200 text-xs text-green-800">
+                      Applied {applyResult.applied} update(s){applyResult.errors > 0 ? ` · ${applyResult.errors} error(s)` : ''}.
+                    </div>
+                  )}
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-[#E5E7EB]">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Direction</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">GBP</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tracker</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Suggested</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {runResult.details.statusMismatches.length === 0 ? (
+                        <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No status mismatches found.</td></tr>
+                      ) : runResult.details.statusMismatches.map((row, idx) => {
+                        const applied = appliedCodes.has(row.store_code);
+                        return (
+                          <tr key={idx} className={`border-b border-[#E5E7EB] hover:bg-gray-50 ${applied ? 'opacity-60' : ''}`}>
+                            <td className="px-4 py-3 font-mono text-xs">{row.store_code}</td>
+                            <td className="px-4 py-3 font-medium text-[#1C2B3A] max-w-[180px] truncate">{row.business_name}</td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                row.direction === 'gbp_ahead'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {row.direction === 'gbp_ahead' ? 'GBP ahead' : 'Tracker ahead'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3"><StatusBadge status={row.gbp_status} /></td>
+                            <td className="px-4 py-3"><StatusBadge status={row.tracker_status} /></td>
+                            <td className="px-4 py-3"><StatusBadge status={row.suggested_tracker_status} /></td>
+                            <td className="px-4 py-3 text-right">
+                              {applied ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                                  <CheckCircle size={13} /> Applied
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleApplyOne(row)}
+                                  className="text-xs font-medium px-2.5 py-1 rounded border border-[#E5E7EB] hover:border-[#F5C000] hover:bg-yellow-50 transition-colors"
+                                >
+                                  Apply
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div>
           </Card>

@@ -6,9 +6,56 @@ import { Card } from '@/components/ui/Card';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { ShieldCheck, Copy, AlertTriangle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Copy, AlertTriangle, XCircle, RefreshCw, ExternalLink, Info } from 'lucide-react';
 
 type TabKey = 'duplicates' | 'missing_codes' | 'missing_names' | 'conflicts' | 'gbp_conflicts';
+
+const TAB_DOCS: Record<TabKey, { title: string; what: string; why: string; fix: string }> = {
+  duplicates: {
+    title: 'Duplicate Store Codes',
+    what: 'Rows that share the same store_code (case- and whitespace-normalized) as another row in the tracker.',
+    why: 'Store codes should uniquely identify one location. Duplicates cause reconciliation to silently pick the "last" row, hiding real differences. Often the result of a copy/paste during data entry or an import overwriting an existing row.',
+    fix: 'Open the Tracker, find each duplicate set, and either delete the wrong row or rename one to its real code. Then re-run reconciliation.',
+  },
+  missing_codes: {
+    title: 'Missing Store Codes',
+    what: 'Tracker rows with no store_code at all (NULL or empty string).',
+    why: 'Without a store_code, the row can\'t be matched against the Google Business Profile snapshot during reconciliation. It will always show as "missing from GBP" even if Google has it.',
+    fix: 'Edit the row in the Tracker and add the Google-issued shop code (or your internal SKKE/SKNG/… code if not yet on Google).',
+  },
+  missing_names: {
+    title: 'Missing Business Names',
+    what: 'Tracker rows with no business_name.',
+    why: 'Business names appear in CSV exports, the dashboard, and the Google Bulk Upload sheet. Empty names result in blank cells on Google\'s side, which fail upload validation.',
+    fix: 'Edit the row and enter the official business name (typically "Sun King Shop <City>" or "Sun King <Country> <Location Type>").',
+  },
+  conflicts: {
+    title: 'OV / OU Conflicts',
+    what: 'Two sub-checks: (1) rows where both OV and OU are TRUE — logically impossible since OV means "owned & verified on GBP" and OU means "owned but unverified"; (2) rows with no tracker_status set at all.',
+    why: 'OV and OU are mutually exclusive. Having both true usually means a stale flag wasn\'t cleared when verification completed. Empty tracker_status leaves a row in limbo — it won\'t show up in any of the dashboard buckets.',
+    fix: 'For OV/OU conflicts: unset OU if verification succeeded, or unset OV if it actually failed. For missing status: pick the right value from the Tracker dropdown (Live / In Account / Submitted / Needs Pin / No Claim / Duplicate).',
+  },
+  gbp_conflicts: {
+    title: 'GBP vs Tracker Status Conflicts',
+    what: 'Rows where the latest imported GBP CSV says the location is "Published" but the tracker says it\'s anything other than "Live".',
+    why: 'This is the most common drift — Google approves a listing but the tracker isn\'t updated to "Live". The dashboard "Live on Google Maps" count under-reports reality until you fix this.',
+    fix: 'Use the Reconciliation page → Status Mismatches tab. Each row has an "Apply" button that sets tracker_status to the suggested value. Or click "Apply all suggested" to fix the whole batch at once.',
+  },
+};
+
+function TabInfoPanel({ tab }: { tab: TabKey }) {
+  const doc = TAB_DOCS[tab];
+  return (
+    <div className="flex items-start gap-2 px-4 py-3 bg-[#F5C000]/5 border-b border-[#F5C000]/20 text-xs text-[#374151]">
+      <Info size={14} className="text-[#D4A800] mt-0.5 flex-shrink-0" />
+      <div className="space-y-0.5">
+        <p><span className="font-semibold text-[#1C2B3A]">What:</span> {doc.what}</p>
+        <p><span className="font-semibold text-[#1C2B3A]">Why it matters:</span> {doc.why}</p>
+        <p><span className="font-semibold text-[#1C2B3A]">How to fix:</span> {doc.fix}</p>
+      </div>
+    </div>
+  );
+}
 
 interface QcData {
   summary: {
@@ -156,6 +203,8 @@ export default function QualityControlPage() {
                     </button>
                   ))}
                 </div>
+
+                <TabInfoPanel tab={activeTab} />
 
                 <div className="overflow-x-auto">
                   {activeTab === 'duplicates' && (
