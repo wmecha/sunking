@@ -37,8 +37,11 @@ export interface GeocodeError {
 }
 
 function apiKey(): string {
-  const k = process.env.GOOGLE_MAPS_API_KEY;
-  if (!k) throw new Error('GOOGLE_MAPS_API_KEY is not set — geocoding disabled.');
+  // Prefer a dedicated server-side key (recommended — Google's referrer-
+  // restricted keys reject calls made from serverless functions because
+  // they don't send a Referer header). Falls back to the shared key.
+  const k = process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  if (!k) throw new Error('GOOGLE_MAPS_SERVER_KEY (or GOOGLE_MAPS_API_KEY) is not set — geocoding disabled.');
   return k;
 }
 
@@ -111,7 +114,7 @@ export async function geocodeAddress(
 
 /** True if geocoding is configured. Cheap check used by the UI to hide/show the action. */
 export function isGeocodingEnabled(): boolean {
-  return Boolean(process.env.GOOGLE_MAPS_API_KEY);
+  return Boolean(process.env.GOOGLE_MAPS_SERVER_KEY || process.env.GOOGLE_MAPS_API_KEY);
 }
 
 /**
