@@ -3,9 +3,11 @@ export const dynamic = 'force-dynamic';
 import { TopBar } from '@/components/layout/TopBar';
 import { Card, CardHeader } from '@/components/ui/Card';
 import getDb from '@/lib/db';
+import { initializeSchema } from '@/lib/schema';
 import { Settings, Database, ShieldCheck, Info } from 'lucide-react';
 
 async function getSettingsData() {
+  await initializeSchema();
   const db = getDb();
 
   const [trackerCount, snapshotCount, gbpCount, reconCount, exportCount, auditCount] = await Promise.all([
