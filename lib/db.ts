@@ -19,7 +19,7 @@ function getSql(): ReturnType<typeof postgres> {
     idle_timeout: 20,
     connect_timeout: 10,
     ssl: { rejectUnauthorized: false }, // Supabase pooler — accept their cert chain
-    // postgres.js returns Date objects and BigInt — normalise to strings/numbers
+    prepare: false, // Supavisor transaction pool mode doesn't support prepared statements
     transform: {
       undefined: null,
     },
