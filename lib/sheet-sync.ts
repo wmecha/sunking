@@ -32,6 +32,7 @@ const COLUMNS = [
   'address',
   'city',
   'tracker_status',
+  'google_maps_url',
 ] as const;
 type Column = (typeof COLUMNS)[number];
 
@@ -48,7 +49,24 @@ const HEADERS = [
   'Address',
   'City',
   'Tracker Status',
+  'Google Maps URL',
 ];
+
+/** Aliases used when reading the sheet — handles human variations of the header. */
+const HEADER_ALIASES: Record<Column, string[]> = {
+  store_code: ['Store Code', 'store_code', 'Shop Code'],
+  business_name: ['Business Name', 'business_name', 'Name'],
+  country: ['Country', 'country'],
+  location_type: ['Location Type', 'location_type', 'Type'],
+  ov: ['OV'],
+  ou: ['OU'],
+  claiming_issue: ['Claiming Issue', 'claiming_issue'],
+  action_taken: ['Action Taken', 'action_taken'],
+  address: ['Address', 'address'],
+  city: ['City', 'city', 'Locality'],
+  tracker_status: ['Tracker Status', 'tracker_status', 'Status'],
+  google_maps_url: ['Google Maps URL', 'Google Maps Link', 'Maps URL', 'Maps Link', 'GMaps URL', 'Map Link', 'google_maps_url'],
+};
 
 type Row = Record<Column, string>;
 
@@ -134,29 +152,23 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
     return { total_sheet_rows: 0, updated: 0, unchanged: 0, not_in_db: [], applied_changes: [] };
   }
 
-  // Map sheet column index → DB column name using the first row.
+  // Map sheet column index → DB column name using the first row + alias table.
   const header = rawRows[0].map((h) => h.trim().toLowerCase());
-  const indexFor = (name: string): number => {
-    // Try exact match, then loose (no spaces).
-    const i = header.indexOf(name.toLowerCase());
-    if (i >= 0) return i;
-    const collapsed = name.toLowerCase().replace(/[\s_-]/g, '');
-    return header.findIndex((h) => h.replace(/[\s_-]/g, '') === collapsed);
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
+  const normalizedHeader = header.map(norm);
+  const indexForAnyAlias = (aliases: string[]): number => {
+    for (const alias of aliases) {
+      const exact = header.indexOf(alias.toLowerCase());
+      if (exact >= 0) return exact;
+      const loose = normalizedHeader.indexOf(norm(alias));
+      if (loose >= 0) return loose;
+    }
+    return -1;
   };
 
-  const colIdx: Record<Column, number> = {
-    store_code: indexFor('Store Code') >= 0 ? indexFor('Store Code') : indexFor('store_code'),
-    business_name: indexFor('Business Name') >= 0 ? indexFor('Business Name') : indexFor('business_name'),
-    country: indexFor('Country') >= 0 ? indexFor('Country') : indexFor('country'),
-    location_type: indexFor('Location Type') >= 0 ? indexFor('Location Type') : indexFor('location_type'),
-    ov: indexFor('OV'),
-    ou: indexFor('OU'),
-    claiming_issue: indexFor('Claiming Issue') >= 0 ? indexFor('Claiming Issue') : indexFor('claiming_issue'),
-    action_taken: indexFor('Action Taken') >= 0 ? indexFor('Action Taken') : indexFor('action_taken'),
-    address: indexFor('Address') >= 0 ? indexFor('Address') : indexFor('address'),
-    city: indexFor('City') >= 0 ? indexFor('City') : indexFor('city'),
-    tracker_status: indexFor('Tracker Status') >= 0 ? indexFor('Tracker Status') : indexFor('tracker_status'),
-  };
+  const colIdx: Record<Column, number> = Object.fromEntries(
+    (COLUMNS as readonly Column[]).map((c) => [c, indexForAnyAlias(HEADER_ALIASES[c])]),
+  ) as Record<Column, number>;
 
   if (colIdx.store_code < 0) {
     throw new Error(`Sheet header doesn't contain a 'Store Code' column. Found: ${header.join(', ')}`);

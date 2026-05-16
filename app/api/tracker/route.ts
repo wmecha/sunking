@@ -72,6 +72,7 @@ export async function PUT(request: NextRequest) {
       'latitude', 'longitude', 'primary_phone', 'website', 'primary_category',
       'monday_hours', 'tuesday_hours', 'wednesday_hours', 'thursday_hours',
       'friday_hours', 'saturday_hours', 'sunday_hours',
+      'google_maps_url',
     ];
 
     const entries = Object.entries(fields).filter(([key]) => allowedFields.includes(key));

@@ -35,6 +35,11 @@ export interface TrackerLocation {
   address?: string;
   city?: string;
   tracker_status?: string;
+  // Canonical Google Maps Place URL (e.g. https://maps.app.goo.gl/...).
+  // When set, the row's Maps link uses this exact URL — guaranteed to
+  // land on the specific Sun King listing on Google. Falls back to a
+  // lat/lng or address search when unset.
+  google_maps_url?: string | null;
   // Photo URLs (Supabase Storage public URLs)
   logo_photo_url?: string | null;
   cover_photo_url?: string | null;

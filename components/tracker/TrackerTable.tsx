@@ -7,7 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Search, ChevronLeft, ChevronRight, Download, Pencil, CheckCircle, MapPin, ExternalLink } from 'lucide-react';
 import type { TrackerLocation } from '@/lib/types';
 import { PhotoUploader } from '@/components/tracker/PhotoUploader';
-import { googleMapsUrl, hasCoords } from '@/lib/maps-url';
+import { googleMapsUrl, hasCoords, mapsUrlSource } from '@/lib/maps-url';
 
 interface TrackerResponse {
   data: TrackerLocation[];
@@ -284,20 +284,33 @@ export function TrackerTable() {
                     </td>
                     <td className="px-4 py-3 text-center whitespace-nowrap">
                       <div className="inline-flex items-center gap-0.5">
-                        <a
-                          href={googleMapsUrl(row)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className={`p-1 rounded transition-colors ${
-                            hasCoords(row)
+                        {(() => {
+                          const src = mapsUrlSource(row);
+                          const classes =
+                            src === 'canonical'
+                              ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                              : src === 'coords'
                               ? 'text-[#F5C000] hover:text-yellow-600 hover:bg-yellow-50'
-                              : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'
-                          }`}
-                          title={hasCoords(row) ? 'Open in Google Maps (pinned)' : 'Open in Google Maps (search by address)'}
-                        >
-                          <MapPin size={13} />
-                        </a>
+                              : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50';
+                          const title =
+                            src === 'canonical'
+                              ? 'Open in Google Maps (canonical Place link)'
+                              : src === 'coords'
+                              ? 'Open in Google Maps (pinned by coords)'
+                              : 'Open in Google Maps (search by address)';
+                          return (
+                            <a
+                              href={googleMapsUrl(row)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className={`p-1 rounded transition-colors ${classes}`}
+                              title={title}
+                            >
+                              <MapPin size={13} />
+                            </a>
+                          );
+                        })()}
                         <button
                           onClick={(e) => openEdit(row, e)}
                           className="p-1 text-gray-400 hover:text-[#1C2B3A] rounded transition-colors"
@@ -452,6 +465,25 @@ export function TrackerTable() {
                   <ExternalLink size={12} /> Open in Google Maps
                 </a>
               </div>
+
+              {/* Canonical Google Maps URL — the one Google gave for this specific GBP listing */}
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  Google Maps URL
+                  <span className="ml-2 font-normal text-gray-400">— Share link from this location&apos;s GBP listing</span>
+                </label>
+                <input
+                  type="url"
+                  className="input-field font-mono text-xs"
+                  placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/place/..."
+                  value={editForm.google_maps_url ?? ''}
+                  onChange={(e) => setEditForm((f) => ({
+                    ...f,
+                    google_maps_url: e.target.value === '' ? null : e.target.value,
+                  }))}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Latitude</label>
@@ -483,9 +515,16 @@ export function TrackerTable() {
                 </div>
               </div>
               <p className="text-[11px] text-gray-400 mt-2">
-                {hasCoords(editForm)
-                  ? 'The Maps link uses these exact coordinates. Edit to refine the pin position.'
-                  : 'Maps link will search by address. Click "Geocode all" in Settings to auto-fill coords, or paste from Google Maps (right-click → "What\'s here?").'}
+                {mapsUrlSource(editForm) === 'canonical' && (
+                  <>Using the saved Google Maps URL above — lands on the exact GBP listing.</>
+                )}
+                {mapsUrlSource(editForm) === 'coords' && (
+                  <>Using lat/lng — drops a pin at the exact coords (no canonical URL stored).</>
+                )}
+                {mapsUrlSource(editForm) === 'search' && (
+                  <>Searching by address — paste a Maps share link above or set lat/lng to upgrade.
+                  Get coords from Google Maps (right-click → &quot;What&apos;s here?&quot;) or use Settings → &quot;Geocode all&quot;.</>
+                )}
               </p>
             </div>
 
