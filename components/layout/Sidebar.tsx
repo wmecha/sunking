@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  ExternalLink,
 } from 'lucide-react';
 
 const navItems = [
@@ -95,8 +96,18 @@ export function Sidebar() {
         {bottomNavItems.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
       </nav>
 
-      {/* Logout */}
-      <div className="px-3 py-4 border-t border-white/10">
+      {/* Escalate + Logout */}
+      <div className="px-3 py-4 border-t border-white/10 space-y-1">
+        <a
+          href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setMobileOpen(false)}
+          className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-red-300 hover:text-red-200 hover:bg-red-500/10 transition-colors duration-150"
+        >
+          <ExternalLink size={18} />
+          Escalate to Google
+        </a>
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-150"

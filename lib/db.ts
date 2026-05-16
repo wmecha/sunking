@@ -18,6 +18,7 @@ function getSql(): ReturnType<typeof postgres> {
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
+    ssl: 'require',          // Supabase requires SSL on all connections
     // postgres.js returns Date objects and BigInt — normalise to strings/numbers
     transform: {
       undefined: null,
