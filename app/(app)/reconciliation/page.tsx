@@ -6,7 +6,8 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { GitCompare, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { ImportDropzone } from '@/components/import/ImportDropzone';
+import { GitCompare, CheckCircle, AlertTriangle, XCircle, Upload } from 'lucide-react';
 
 interface ReconciliationRun {
   id: number;
@@ -83,6 +84,8 @@ export default function ReconciliationPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'missing_tracker' | 'missing_gbp' | 'mismatches' | 'field_diffs'>('missing_tracker');
+  const [hasSnapshot, setHasSnapshot] = useState<boolean | null>(null); // null = loading
+  const [showUpload, setShowUpload] = useState(false);
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -95,9 +98,30 @@ export default function ReconciliationPage() {
     }
   }, []);
 
+  const checkSnapshot = useCallback(async () => {
+    try {
+      const res = await fetch('/api/import');
+      if (!res.ok) throw new Error('Failed');
+      const json = await res.json();
+      const exists = (json.data || []).length > 0;
+      setHasSnapshot(exists);
+      if (!exists) setShowUpload(true);
+    } catch {
+      setHasSnapshot(false);
+      setShowUpload(true);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRuns();
-  }, [fetchRuns]);
+    checkSnapshot();
+  }, [fetchRuns, checkSnapshot]);
+
+  async function handleUploadSuccess() {
+    setHasSnapshot(true);
+    setShowUpload(false);
+    await handleRunReconciliation();
+  }
 
   async function handleRunReconciliation() {
     setRunning(true);
@@ -138,6 +162,40 @@ export default function ReconciliationPage() {
       />
 
       <div className="p-6 space-y-6">
+        {/* GBP CSV Upload Section */}
+        {hasSnapshot === null ? null : !hasSnapshot || showUpload ? (
+          <Card>
+            <CardHeader
+              title="Upload GBP CSV from Google"
+              subtitle="Export your locations from Google Business Profile and upload the CSV here to run reconciliation"
+              actions={
+                hasSnapshot && showUpload ? (
+                  <button
+                    onClick={() => setShowUpload(false)}
+                    className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                ) : undefined
+              }
+            />
+            <ImportDropzone onImportSuccess={handleUploadSuccess} />
+          </Card>
+        ) : (
+          <div className="flex items-center justify-between bg-[#F5C000]/10 border border-[#F5C000]/30 rounded-lg px-5 py-3">
+            <p className="text-sm text-[#1C2B3A] font-medium">
+              GBP snapshot loaded — ready to run reconciliation.
+            </p>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-[#1C2B3A] hover:text-[#F5C000] transition-colors"
+            >
+              <Upload size={15} />
+              Upload new GBP CSV
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 flex items-center gap-2">
             <XCircle size={16} />

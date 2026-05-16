@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { ShieldCheck, Copy, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Copy, AlertTriangle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
 
 type TabKey = 'duplicates' | 'missing_codes' | 'missing_names' | 'conflicts' | 'gbp_conflicts';
 
@@ -69,7 +69,21 @@ export default function QualityControlPage() {
         }
       />
 
-      <div className="p-6 space-y-6">
+      {/* Escalate banner */}
+      <div className="mx-3 sm:mx-6 mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+        <p className="text-sm text-amber-800 font-medium">Issues found? Raise a support request directly with Google Business Profile.</p>
+        <a
+          href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex shrink-0 items-center gap-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 hover:border-red-500 transition-colors"
+        >
+          <ExternalLink size={14} />
+          Escalate to Google Support
+        </a>
+      </div>
+
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {loading && !data ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <svg className="animate-spin h-5 w-5 mr-2 text-[#F5C000]" fill="none" viewBox="0 0 24 24">

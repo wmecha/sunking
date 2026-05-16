@@ -15,6 +15,7 @@ import {
   Download,
   Clock,
   ShieldCheck,
+  ExternalLink,
 } from 'lucide-react';
 
 interface CountryBreakdown {
@@ -88,9 +89,9 @@ export default async function DashboardPage() {
         subtitle="Sun King Google Business Profile overview"
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           <MetricCard
             label="Total in Account"
             value={data.totalInAccount}
@@ -129,7 +130,7 @@ export default async function DashboardPage() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
           {/* Country Breakdown Table */}
           <div className="xl:col-span-2">
             <Card padding={false}>
@@ -235,6 +236,15 @@ export default async function DashboardPage() {
                   <ShieldCheck size={16} className="text-[#F5C000]" />
                   Quality Control
                 </Link>
+                <a
+                  href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-400 transition-colors"
+                >
+                  <ExternalLink size={16} className="text-red-600" />
+                  Escalate to Google Support
+                </a>
               </div>
             </Card>
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -12,6 +13,8 @@ import {
   ClipboardList,
   Settings,
   LogOut,
+  Menu,
+  X,
 } from 'lucide-react';
 
 const navItems = [
@@ -31,6 +34,7 @@ const bottomNavItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -43,6 +47,7 @@ export function Sidebar() {
       <Link
         key={href}
         href={href}
+        onClick={() => setMobileOpen(false)}
         className={`
           flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors duration-150
           ${isActive
@@ -57,10 +62,10 @@ export function Sidebar() {
     );
   }
 
-  return (
-    <aside className="w-60 flex-shrink-0 bg-[#1C2B3A] min-h-screen flex flex-col">
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="px-5 py-6 border-b border-white/10">
+      <div className="px-5 py-6 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-2xl">☀</span>
           <div>
@@ -68,6 +73,14 @@ export function Sidebar() {
             <p className="text-white/50 text-xs mt-0.5 leading-none">Location Intelligence</p>
           </div>
         </div>
+        {/* Close button — only visible on mobile */}
+        <button
+          className="md:hidden text-white/60 hover:text-white p-1"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close menu"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       {/* Primary Nav */}
@@ -92,6 +105,39 @@ export function Sidebar() {
           Logout
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger button — shown only on small screens */}
+      <button
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-md bg-[#1C2B3A] text-white shadow-lg"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open menu"
+      >
+        <Menu size={20} />
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — always visible on md+; slide-in drawer on mobile */}
+      <aside
+        className={`
+          fixed md:static inset-y-0 left-0 z-40
+          w-60 flex-shrink-0 bg-[#1C2B3A] min-h-screen flex flex-col
+          transition-transform duration-200 ease-in-out
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
