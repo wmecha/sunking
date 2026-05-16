@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
     if (country) { whereParts.push('country = ?'); params.push(country); }
     if (status) { whereParts.push('tracker_status = ?'); params.push(status); }
     if (search) {
-      whereParts.push('(store_code LIKE ? OR business_name LIKE ? OR city LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      whereParts.push('(store_code ILIKE ? OR business_name ILIKE ? OR city ILIKE ? OR country ILIKE ? OR address ILIKE ?)');
+      const term = `%${search}%`;
+      params.push(term, term, term, term, term);
     }
 
     const where = 'WHERE ' + whereParts.join(' AND ');

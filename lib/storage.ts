@@ -23,6 +23,21 @@ export function publicUrl(path: string): string {
   return `${projectUrl()}/storage/v1/object/public/${BUCKET}/${encodeURI(path)}`;
 }
 
+/** Headers used for every Storage REST call.
+ *  Supabase Storage requires the legacy service_role JWT in BOTH headers:
+ *    apikey: <jwt>
+ *    Authorization: Bearer <jwt>
+ *  The new sb_secret_* opaque keys are rejected by the Storage API ("Invalid Compact JWS").
+ */
+function storageHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const key = serviceKey();
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    ...extra,
+  };
+}
+
 /** Upload a file. `path` is the object key inside the bucket (e.g. "SKKE001/logo.jpg"). */
 export async function uploadObject(
   path: string,
@@ -32,11 +47,7 @@ export async function uploadObject(
   const url = `${projectUrl()}/storage/v1/object/${BUCKET}/${encodeURI(path)}`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serviceKey()}`,
-      'Content-Type': contentType,
-      'x-upsert': 'true',
-    },
+    headers: storageHeaders({ 'Content-Type': contentType, 'x-upsert': 'true' }),
     body: body as BodyInit,
   });
   if (!res.ok) {
@@ -51,7 +62,7 @@ export async function deleteObject(path: string): Promise<boolean> {
   const url = `${projectUrl()}/storage/v1/object/${BUCKET}/${encodeURI(path)}`;
   const res = await fetch(url, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${serviceKey()}` },
+    headers: storageHeaders(),
   });
   if (res.status === 404) return true;
   if (!res.ok) {

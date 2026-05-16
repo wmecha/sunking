@@ -11,11 +11,12 @@ export async function GET() {
   try {
     const [dupsResult, missingCodesResult, missingNamesResult, ovouConflictResult, noStatusResult, latestSnapshotResult] =
       await Promise.all([
-        // Duplicate store codes (STRING_AGG replaces SQLite GROUP_CONCAT)
+        // Duplicate store codes — group by normalized form, but return a
+        // representative original value via MIN() (Postgres strict-GROUP-BY).
         db.execute(`
-          SELECT store_code, COUNT(*) as count,
-            STRING_AGG(business_name, ' | ') as names,
-            STRING_AGG(country, ' | ') as countries
+          SELECT MIN(store_code) AS store_code, COUNT(*) AS count,
+            STRING_AGG(business_name, ' | ') AS names,
+            STRING_AGG(country, ' | ') AS countries
           FROM tracker_locations
           WHERE store_code IS NOT NULL AND store_code != ''
           GROUP BY UPPER(TRIM(store_code))

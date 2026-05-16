@@ -18,7 +18,10 @@ export function getComposio(): Composio {
   if (!apiKey) {
     throw new Error('COMPOSIO_API_KEY is not set — Google Sheet sync is disabled.');
   }
-  _client = new Composio({ apiKey });
+  // toolkitVersions: 'latest' tells Composio to use the latest version of any
+  // toolkit we call (required since SDK v0.10). Avoids "Toolkit version not
+  // specified" errors at execute time.
+  _client = new Composio({ apiKey, toolkitVersions: 'latest' });
   return _client;
 }
 

@@ -31,16 +31,23 @@ interface QcData {
 export default function QualityControlPage() {
   const [data, setData] = useState<QcData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('duplicates');
 
   async function fetchData() {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/quality-control');
       const json = await res.json();
+      if (!res.ok || !json?.summary) {
+        throw new Error(json?.error || `Request failed (${res.status})`);
+      }
       setData(json);
     } catch (err) {
       console.error(err);
+      setError(err instanceof Error ? err.message : 'Failed to load quality control data');
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -92,6 +99,17 @@ export default function QualityControlPage() {
             </svg>
             Running quality checks...
           </div>
+        ) : error ? (
+          <Card>
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <AlertTriangle size={40} className="text-red-500" />
+              <p className="text-lg font-semibold text-[#1C2B3A]">Quality check failed</p>
+              <p className="text-sm text-gray-600 max-w-md break-words">{error}</p>
+              <Button onClick={fetchData} variant="secondary">
+                <RefreshCw size={15} /> Retry
+              </Button>
+            </div>
+          </Card>
         ) : data ? (
           <>
             {/* Summary metrics */}
