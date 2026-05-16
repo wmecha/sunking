@@ -4,7 +4,9 @@ import { TopBar } from '@/components/layout/TopBar';
 import { Card, CardHeader } from '@/components/ui/Card';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
-import { Settings, Database, ShieldCheck, Info } from 'lucide-react';
+import { isSyncEnabled } from '@/lib/composio';
+import { SyncPanel } from '@/components/settings/SyncPanel';
+import { Settings, Database, ShieldCheck, Info, RefreshCw } from 'lucide-react';
 
 async function getSettingsData() {
   await initializeSchema();
@@ -47,12 +49,28 @@ function StatRow({ label, value }: { label: string; value: number | string }) {
 
 export default async function SettingsPage() {
   const data = await getSettingsData();
+  const syncEnabled = isSyncEnabled();
+  const sheetId = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
+  const sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : null;
 
   return (
     <div className="flex flex-col min-h-full">
       <TopBar title="Settings" subtitle="Application configuration and data management" />
 
       <div className="p-6 space-y-6 max-w-3xl">
+        {/* Google Sheet Sync */}
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <RefreshCw size={18} className="text-[#F5C000]" />
+            <h2 className="text-base font-semibold text-[#1C2B3A]">Google Sheet Sync</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Mirror the tracker between the app DB and the Master Tracker Google Sheet.
+            Push overwrites the sheet from the DB; Pull reads the sheet and applies field-level updates.
+          </p>
+          <SyncPanel syncEnabled={syncEnabled} sheetUrl={sheetUrl} />
+        </Card>
+
         {/* App Info */}
         <Card>
           <CardHeader title="Application" />
@@ -67,7 +85,8 @@ export default async function SettingsPage() {
             <StatRow label="Version" value="1.0.0" />
             <StatRow label="Framework" value="Next.js 14 (App Router)" />
             <StatRow label="Database" value="PostgreSQL via Supabase" />
-            <StatRow label="Deployment" value="Self-hosted / Node.js" />
+            <StatRow label="Deployment" value="Vercel (Next.js serverless)" />
+            <StatRow label="Sheet sync" value={syncEnabled ? 'Enabled' : 'Disabled (env vars missing)'} />
           </div>
         </Card>
 
@@ -119,7 +138,8 @@ export default async function SettingsPage() {
             <h2 className="text-base font-semibold text-[#1C2B3A]">Data Management</h2>
           </div>
           <p className="text-sm text-gray-500 mb-4">
-            The database file is stored at <code className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">data/sunking.db</code> in the project root. Back it up regularly.
+            Data is stored in Supabase PostgreSQL. Use the export buttons below to grab CSVs,
+            or the Sync panel above to push/pull from the Master Tracker Google Sheet.
           </p>
           <div className="space-y-2">
             <a
@@ -128,10 +148,13 @@ export default async function SettingsPage() {
             >
               Export full tracker as CSV
             </a>
+            <a
+              href="/api/export/google-bulk"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[#374151] border border-[#E5E7EB] rounded-md hover:bg-gray-50 hover:border-[#F5C000] transition-colors"
+            >
+              Export Google Bulk Upload CSV
+            </a>
           </div>
-          <p className="text-xs text-gray-400 mt-4">
-            To reset the database, delete <code className="font-mono text-xs">data/sunking.db</code> and restart the server. Seed data will be automatically restored from <code className="font-mono text-xs">data/seeds/</code>.
-          </p>
         </Card>
       </div>
     </div>
