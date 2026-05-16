@@ -239,6 +239,15 @@ export default async function DashboardPage() {
                   Quality Control
                 </Link>
                 <a
+                  href="https://business.google.com/groups/117940732771312023601/locations"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-[#1C2B3A] border border-[#F5C000] bg-yellow-50 hover:bg-yellow-100 transition-colors"
+                >
+                  <ExternalLink size={16} className="text-[#F5C000]" />
+                  Go to Google Profile Locations
+                </a>
+                <a
                   href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
                   target="_blank"
                   rel="noopener noreferrer"

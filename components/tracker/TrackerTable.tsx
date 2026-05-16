@@ -17,7 +17,7 @@ interface TrackerResponse {
 }
 
 const TRACKER_STATUSES = ['Live', 'In Account', 'Submitted', 'Needs Pin', 'No Claim', 'Duplicate', 'Closed'];
-const LOCATION_TYPES = ['Retail Shop', 'Agent', 'Distributor', 'Service Centre', 'Head Office', 'Other'];
+const LOCATION_TYPES = ['Shop', 'Store', 'Experience Centre', 'Warehouse', 'Head Office', 'LPG Depot'];
 
 const SAVED_VIEWS = [
   { label: 'All', status: '', country: '' },

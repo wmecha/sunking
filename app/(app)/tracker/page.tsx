@@ -9,15 +9,26 @@ export default function TrackerPage() {
         title="Location Tracker"
         subtitle="All Sun King locations with claiming status and ownership verification"
         actions={
-          <a
-            href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 hover:border-red-500 transition-colors"
-          >
-            <ExternalLink size={15} />
-            Escalate to Google Support
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="https://business.google.com/groups/117940732771312023601/locations"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-md border border-[#F5C000] bg-yellow-50 px-3 py-2 text-sm font-semibold text-[#1C2B3A] hover:bg-yellow-100 transition-colors"
+            >
+              <ExternalLink size={15} />
+              GBP Locations
+            </a>
+            <a
+              href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 hover:border-red-500 transition-colors"
+            >
+              <ExternalLink size={15} />
+              Escalate to Google
+            </a>
+          </div>
         }
       />
       <div className="p-3 sm:p-6">

@@ -99,6 +99,16 @@ export function Sidebar() {
       {/* Escalate + Logout */}
       <div className="px-3 py-4 border-t border-white/10 space-y-1">
         <a
+          href="https://business.google.com/groups/117940732771312023601/locations"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setMobileOpen(false)}
+          className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-[#F5C000] hover:text-yellow-300 hover:bg-yellow-500/10 transition-colors duration-150"
+        >
+          <ExternalLink size={18} />
+          Go to GBP Locations
+        </a>
+        <a
           href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
           target="_blank"
           rel="noopener noreferrer"
