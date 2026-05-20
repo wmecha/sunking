@@ -389,6 +389,9 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
     const changes: Record<string, [unknown, unknown]> = {};
     for (const c of COLUMNS) {
       if (c === 'store_code') continue;
+      // Tracker status is owned by the app. The sheet uses values like DONE
+      // as an operations marker, and those must not replace Live in the DB.
+      if (c === 'tracker_status') continue;
       // Sheet may have empty cells we don't want to use to wipe DB values.
       // Treat empty-string sheet values as "no opinion" — skip them.
       const sheetVal = normalizeSheetValue(c, (sheetRow[c] ?? '').toString());
