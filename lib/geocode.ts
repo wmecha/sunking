@@ -86,7 +86,6 @@ export async function geocodeAddress(
     return { ok: false, error: { status: `HTTP_${res.status}`, message: await res.text().catch(() => '') } };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let json: any;
   try {
     json = await res.json();

@@ -186,7 +186,7 @@ export function TrackerTable() {
         <div className="flex items-center gap-2 flex-1 min-w-[200px]">
           <input
             type="text"
-            placeholder="Search store code, name, city..."
+            placeholder="Search store code, name, locality..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -236,7 +236,7 @@ export function TrackerTable() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Store Code</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Business Name</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Country</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">City</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Locality</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">OV</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">OU</th>
@@ -386,7 +386,7 @@ export function TrackerTable() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">City</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Locality</label>
                 <input
                   className="input-field"
                   value={editForm.city || ''}

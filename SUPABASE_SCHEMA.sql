@@ -39,10 +39,47 @@ CREATE TABLE IF NOT EXISTS tracker_locations (
   claiming_issue TEXT,
   action_taken   TEXT,
   address        TEXT,
-  city           TEXT,
+  city           TEXT, -- Locality
+  latitude       DOUBLE PRECISION,
+  longitude      DOUBLE PRECISION,
+  google_maps_url TEXT,
+  logo_photo_url TEXT,
+  cover_photo_url TEXT,
+  other_photo_urls JSONB,
+  primary_phone TEXT,
+  website TEXT,
+  primary_category TEXT,
+  monday_hours TEXT,
+  tuesday_hours TEXT,
+  wednesday_hours TEXT,
+  thursday_hours TEXT,
+  friday_hours TEXT,
+  saturday_hours TEXT,
+  sunday_hours TEXT,
   tracker_status TEXT,
-  updated_at     TIMESTAMPTZ DEFAULT NOW()
+  updated_at     TIMESTAMPTZ DEFAULT NOW(),
+  sheet_synced_at TIMESTAMPTZ
 );
+
+-- Existing deployments may already have tracker_locations. Keep these
+-- additive so applying the schema file remains safe.
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS google_maps_url TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS logo_photo_url TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS cover_photo_url TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS other_photo_urls JSONB;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS primary_phone TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS website TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS primary_category TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS monday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS tuesday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS wednesday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS thursday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS friday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS saturday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sunday_hours TEXT;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sheet_synced_at TIMESTAMPTZ;
 
 -- Reconciliation run history
 CREATE TABLE IF NOT EXISTS reconciliation_runs (

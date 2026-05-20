@@ -9,7 +9,7 @@ export async function GET() {
   const db = getDb();
 
   try {
-    const [dupsResult, missingCodesResult, missingNamesResult, ovouConflictResult, noStatusResult, latestSnapshotResult] =
+    const [dupsResult, missingCodesResult, missingNamesResult, missingCoordsResult, ovouConflictResult, noStatusResult, latestSnapshotResult] =
       await Promise.all([
         // Duplicate store codes — group by normalized form, but return a
         // representative original value via MIN() (Postgres strict-GROUP-BY).
@@ -36,6 +36,13 @@ export async function GET() {
           FROM tracker_locations
           WHERE business_name IS NULL OR business_name = ''
           ORDER BY country
+        `),
+        // Missing coordinates
+        db.execute(`
+          SELECT id, store_code, business_name, country, city, latitude, longitude, tracker_status
+          FROM tracker_locations
+          WHERE latitude IS NULL OR longitude IS NULL
+          ORDER BY country, business_name
         `),
         // OV and OU both true (logical conflict)
         db.execute(`
@@ -79,6 +86,7 @@ export async function GET() {
       dupsResult.rows.length +
       missingCodesResult.rows.length +
       missingNamesResult.rows.length +
+      missingCoordsResult.rows.length +
       ovouConflictResult.rows.length +
       noStatusResult.rows.length +
       gbpConflicts.length;
@@ -89,6 +97,7 @@ export async function GET() {
         duplicateStoreCodes:  dupsResult.rows.length,
         missingStoreCodes:    missingCodesResult.rows.length,
         missingBusinessNames: missingNamesResult.rows.length,
+        missingCoordinates:   missingCoordsResult.rows.length,
         ovouConflicts:        ovouConflictResult.rows.length,
         noStatus:             noStatusResult.rows.length,
         gbpStatusConflicts:   gbpConflicts.length,
@@ -96,6 +105,7 @@ export async function GET() {
       duplicateStoreCodes:  dupsResult.rows,
       missingStoreCodes:    missingCodesResult.rows,
       missingBusinessNames: missingNamesResult.rows,
+      missingCoordinates:   missingCoordsResult.rows,
       ovouConflicts:        ovouConflictResult.rows,
       noStatus:             noStatusResult.rows,
       gbpStatusConflicts:   gbpConflicts,

@@ -18,7 +18,7 @@ function getSql(): ReturnType<typeof postgres> {
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
-    ssl: { rejectUnauthorized: false }, // Supabase pooler — accept their cert chain
+    ssl: { rejectUnauthorized: false }, // Supabase pooler - accept their cert chain
     prepare: false, // Supavisor transaction pool mode doesn't support prepared statements
     transform: {
       undefined: null,
@@ -54,7 +54,6 @@ async function execute(
   const client = getSql();
   const str  = typeof q === 'string' ? q : q.sql;
   const args = typeof q === 'string' ? [] : (q.args ?? []);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await client.unsafe(toPostgres(str), args as any[]);
   return {
     rows: (result as unknown as Record<string, unknown>[]).map(serializeRow),
@@ -68,7 +67,6 @@ async function batch(
   const client = getSql();
   await client.begin(async (tx) => {
     for (const s of stmts) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await tx.unsafe(toPostgres(s.sql), (s.args ?? []) as any[]);
     }
   });

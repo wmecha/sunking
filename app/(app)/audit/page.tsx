@@ -20,6 +20,8 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   run_reconciliation: { label: 'Reconciliation', color: 'bg-purple-100 text-purple-800' },
   export_csv: { label: 'Export', color: 'bg-green-100 text-green-800' },
   edit_tracker_location: { label: 'Tracker Edit', color: 'bg-amber-100 text-amber-800' },
+  sync_push_to_sheet: { label: 'Sheet Push', color: 'bg-sky-100 text-sky-800' },
+  sync_pull_from_sheet: { label: 'Sheet Pull', color: 'bg-cyan-100 text-cyan-800' },
 };
 
 function ActionBadge({ action }: { action: string }) {

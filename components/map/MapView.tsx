@@ -46,13 +46,9 @@ function colourFor(status: string): string {
 
 export function MapView({ apiKey, locations, countries, types, statuses, missingCount }: MapViewProps) {
   const mapDivRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clustererRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markersRef = useRef<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const infoWindowRef = useRef<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +117,6 @@ export function MapView({ apiKey, locations, countries, types, statuses, missing
     markersRef.current = [];
 
     const map = mapRef.current;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g: any = (window as any).google;
     const bounds = new g.maps.LatLngBounds();
 

@@ -31,6 +31,8 @@ const COLUMNS = [
   'action_taken',
   'address',
   'city',
+  'latitude',
+  'longitude',
   'tracker_status',
   'google_maps_url',
 ] as const;
@@ -54,7 +56,9 @@ const COLUMN_HEADERS: Record<Column, string[]> = {
   action_taken: ['Action Taken'],
   address: ['Address Line 1', 'Address'],
   city: ['Locality', 'City'],
-  tracker_status: ['Tracker Status', 'Status'],
+  latitude: ['Latitude', 'Lat'],
+  longitude: ['Longitude', 'Lng', 'Long'],
+  tracker_status: ['Tracker Status'],
   google_maps_url: ['Google Maps Link', 'Google Maps URL', 'Maps URL', 'Maps Link', 'GMaps URL', 'Map Link'],
 };
 
@@ -67,6 +71,21 @@ function toSheetRow(r: Record<string, unknown>): string[] {
     const v = r[c];
     return v == null ? '' : String(v);
   });
+}
+
+function normalizeSheetValue(column: Column, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  if (column === 'latitude' || column === 'longitude') {
+    const numeric = Number(trimmed);
+    const min = column === 'latitude' ? -90 : -180;
+    const max = column === 'latitude' ? 90 : 180;
+    if (!Number.isFinite(numeric) || numeric < min || numeric > max) return '';
+    return String(numeric);
+  }
+
+  return trimmed;
 }
 
 /**
@@ -84,7 +103,6 @@ async function executeTool(toolSlug: string, args: Record<string, unknown>, user
     });
   } catch (err) {
     // The SDK wraps the real cause in .cause; extract everything useful.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const e = err as any;
     const parts: string[] = [];
     if (e?.message) parts.push(e.message);
@@ -178,7 +196,6 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
   );
 
   // Response shape from Composio: { data: { valueRanges: [{ values: [[...]] }] } }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const r = sheetResp as any;
   const valueRanges = r?.data?.valueRanges ?? r?.valueRanges ?? r?.data?.response?.data?.valueRanges ?? [];
   const rawRows: string[][] = valueRanges[0]?.values ?? [];
@@ -257,7 +274,7 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
       if (c === 'store_code') continue;
       // Sheet may have empty cells we don't want to use to wipe DB values.
       // Treat empty-string sheet values as "no opinion" — skip them.
-      const sheetVal = (sheetRow[c] ?? '').toString().trim();
+      const sheetVal = normalizeSheetValue(c, (sheetRow[c] ?? '').toString());
       const dbVal = (dbRow[c] ?? '').toString().trim();
       if (sheetVal === '') continue;
       if (sheetVal !== dbVal) {

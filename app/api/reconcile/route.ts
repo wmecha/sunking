@@ -103,10 +103,10 @@ export async function POST() {
           });
         }
 
-        // Field-level diff (name, city, country)
+        // Field-level diff. Tracker `city` is the locality field.
         const fieldChecks: Array<[string, string | undefined, string | undefined]> = [
           ['Business Name', gbpLoc.business_name, trackerLoc.business_name],
-          ['City',          gbpLoc.city,          trackerLoc.city],
+          ['Locality',      gbpLoc.city,          trackerLoc.city],
           ['Country',       gbpLoc.country,        trackerLoc.country],
         ];
         for (const [field, gbpVal, trackerVal] of fieldChecks) {

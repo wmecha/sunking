@@ -338,7 +338,7 @@ export default function ReconciliationPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">GBP Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">City</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Locality</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Country</th>
                     </tr>
                   </thead>
@@ -365,7 +365,7 @@ export default function ReconciliationPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tracker Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">City</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Locality</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Country</th>
                     </tr>
                   </thead>
@@ -501,7 +501,7 @@ export default function ReconciliationPage() {
           </div>
           {runs.length === 0 ? (
             <div className="px-6 py-8 text-center text-gray-400 text-sm">
-              No reconciliation runs yet. Click "Run Reconciliation" above.
+              No reconciliation runs yet. Click &quot;Run Reconciliation&quot; above.
             </div>
           ) : (
             <div className="overflow-x-auto">

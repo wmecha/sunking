@@ -22,6 +22,8 @@ export async function initializeSchema(): Promise<void> {
     console.warn('[schema] tracker_locations table not found — schema has not been applied yet. Skipping seed.', err);
     return;
   }
+  await ensureTrackerColumns(db);
+
   if (count > 0) return; // Already seeded — nothing to do
 
   // Load seed file
@@ -78,4 +80,30 @@ export async function initializeSchema(): Promise<void> {
   }
 
   console.log('[schema] Seed complete.');
+}
+
+async function ensureTrackerColumns(db: ReturnType<typeof getDb>): Promise<void> {
+  try {
+    await db.batch([
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS google_maps_url TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS logo_photo_url TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS cover_photo_url TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS other_photo_urls JSONB' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS primary_phone TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS website TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS primary_category TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS monday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS tuesday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS wednesday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS thursday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS friday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS saturday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sunday_hours TEXT' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sheet_synced_at TIMESTAMPTZ' },
+    ]);
+  } catch (err) {
+    console.warn('[schema] Failed to ensure tracker location columns.', err);
+  }
 }

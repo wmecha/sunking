@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ShieldCheck, Copy, AlertTriangle, XCircle, RefreshCw, ExternalLink, Info } from 'lucide-react';
 
-type TabKey = 'duplicates' | 'missing_codes' | 'missing_names' | 'conflicts' | 'gbp_conflicts';
+type TabKey = 'duplicates' | 'missing_codes' | 'missing_names' | 'missing_coords' | 'conflicts' | 'gbp_conflicts';
 
 const TAB_DOCS: Record<TabKey, { title: string; what: string; why: string; fix: string }> = {
   duplicates: {
@@ -28,6 +28,12 @@ const TAB_DOCS: Record<TabKey, { title: string; what: string; why: string; fix: 
     what: 'Tracker rows with no business_name.',
     why: 'Business names appear in CSV exports, the dashboard, and the Google Bulk Upload sheet. Empty names result in blank cells on Google\'s side, which fail upload validation.',
     fix: 'Edit the row and enter the official business name (typically "Sun King Shop <City>" or "Sun King <Country> <Location Type>").',
+  },
+  missing_coords: {
+    title: 'Missing Coordinates',
+    what: 'Tracker rows where latitude or longitude is blank.',
+    why: 'Coordinates support map QA, duplicate review, and Google bulk upload readiness. Missing one side of the pair makes the location unsuitable for precise pin review.',
+    fix: 'Add both latitude and longitude from the verified map pin or approved geocoding workflow, then re-run quality control.',
   },
   conflicts: {
     title: 'OV / OU Conflicts',
@@ -63,6 +69,7 @@ interface QcData {
     duplicateStoreCodes: number;
     missingStoreCodes: number;
     missingBusinessNames: number;
+    missingCoordinates: number;
     ovouConflicts: number;
     noStatus: number;
     gbpStatusConflicts: number;
@@ -70,6 +77,7 @@ interface QcData {
   duplicateStoreCodes: Array<{ store_code: string; count: number; names: string; countries: string }>;
   missingStoreCodes: Array<{ id: number; business_name: string; country: string; city: string; tracker_status: string }>;
   missingBusinessNames: Array<{ id: number; store_code: string; country: string; city: string; tracker_status: string }>;
+  missingCoordinates: Array<{ id: number; store_code: string; business_name: string; country: string; city: string; latitude: number | null; longitude: number | null; tracker_status: string }>;
   ovouConflicts: Array<{ id: number; store_code: string; business_name: string; country: string; ov: string; ou: string; tracker_status: string }>;
   noStatus: Array<{ id: number; store_code: string; business_name: string; country: string; city: string }>;
   gbpStatusConflicts: Array<{ id: number; store_code: string; business_name: string; tracker_status: string; gbp_status: string; country: string; city: string }>;
@@ -106,6 +114,7 @@ export default function QualityControlPage() {
     { key: 'duplicates', label: 'Duplicate Codes', count: data.summary.duplicateStoreCodes, color: 'text-red-600' },
     { key: 'missing_codes', label: 'Missing Codes', count: data.summary.missingStoreCodes, color: 'text-amber-600' },
     { key: 'missing_names', label: 'Missing Names', count: data.summary.missingBusinessNames, color: 'text-amber-600' },
+    { key: 'missing_coords', label: 'Missing Coords', count: data.summary.missingCoordinates, color: 'text-amber-600' },
     { key: 'conflicts', label: 'OV/OU Conflicts', count: data.summary.ovouConflicts + data.summary.noStatus, color: 'text-orange-600' },
     { key: 'gbp_conflicts', label: 'GBP Conflicts', count: data.summary.gbpStatusConflicts, color: 'text-purple-600' },
   ] : [];
@@ -170,6 +179,7 @@ export default function QualityControlPage() {
               <MetricCard label="Dup. Codes" value={data.summary.duplicateStoreCodes} accentColor="#DC2626" icon={<Copy size={20} />} />
               <MetricCard label="Missing Codes" value={data.summary.missingStoreCodes} accentColor="#D97706" />
               <MetricCard label="Missing Names" value={data.summary.missingBusinessNames} accentColor="#D97706" />
+              <MetricCard label="Missing Coords" value={data.summary.missingCoordinates} accentColor="#D97706" />
               <MetricCard label="OV/OU Conflicts" value={data.summary.ovouConflicts} accentColor="#EA580C" icon={<XCircle size={20} />} />
               <MetricCard label="GBP Conflicts" value={data.summary.gbpStatusConflicts} accentColor="#7C3AED" />
             </div>
@@ -238,7 +248,7 @@ export default function QualityControlPage() {
                         <tr className="bg-gray-50 border-b border-[#E5E7EB]">
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Country</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">City</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Locality</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
                         </tr>
                       </thead>
@@ -263,7 +273,7 @@ export default function QualityControlPage() {
                         <tr className="bg-gray-50 border-b border-[#E5E7EB]">
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Country</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">City</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Locality</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
                         </tr>
                       </thead>
@@ -276,6 +286,35 @@ export default function QualityControlPage() {
                             <td className="px-4 py-3 text-gray-500">{row.country || '—'}</td>
                             <td className="px-4 py-3 text-gray-500">{row.city || '—'}</td>
                             <td className="px-4 py-3"><StatusBadge status={row.tracker_status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {activeTab === 'missing_coords' && (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-[#E5E7EB]">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Store Code</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Business Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Country</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Locality</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Lat</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Lng</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.missingCoordinates.length === 0 ? (
+                          <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">All locations have coordinates.</td></tr>
+                        ) : data.missingCoordinates.map((row) => (
+                          <tr key={row.id} className="border-b border-[#E5E7EB] hover:bg-gray-50">
+                            <td className="px-4 py-3 font-mono text-xs text-amber-700">{row.store_code || '—'}</td>
+                            <td className="px-4 py-3 font-medium text-[#1C2B3A]">{row.business_name || '—'}</td>
+                            <td className="px-4 py-3 text-gray-500">{row.country || '—'}</td>
+                            <td className="px-4 py-3 text-gray-500">{row.city || '—'}</td>
+                            <td className="px-4 py-3 text-right text-gray-500">{row.latitude ?? '—'}</td>
+                            <td className="px-4 py-3 text-right text-gray-500">{row.longitude ?? '—'}</td>
                           </tr>
                         ))}
                       </tbody>
