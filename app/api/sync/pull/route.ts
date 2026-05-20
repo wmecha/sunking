@@ -3,17 +3,14 @@ export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { pullFromSheet } from '@/lib/sheet-sync';
-import { isSyncEnabled } from '@/lib/composio';
+import { getSheetSyncDisabledReason, isSheetSyncEnabled } from '@/lib/sheet-sync-config';
 import { logAction } from '@/lib/audit';
 
 export async function GET() {
   // Dry-run preview
-  if (!isSyncEnabled()) {
+  if (!isSheetSyncEnabled()) {
     return NextResponse.json(
-      {
-        error:
-          'Sync disabled. Set COMPOSIO_API_KEY and either COMPOSIO_USER_ID or COMPOSIO_CONNECTED_ACCOUNT_ID on Vercel.',
-      },
+      { error: getSheetSyncDisabledReason() },
       { status: 503 },
     );
   }
@@ -28,12 +25,9 @@ export async function GET() {
 }
 
 export async function POST(_req: NextRequest) {
-  if (!isSyncEnabled()) {
+  if (!isSheetSyncEnabled()) {
     return NextResponse.json(
-      {
-        error:
-          'Sync disabled. Set COMPOSIO_API_KEY and either COMPOSIO_USER_ID or COMPOSIO_CONNECTED_ACCOUNT_ID on Vercel.',
-      },
+      { error: getSheetSyncDisabledReason() },
       { status: 503 },
     );
   }

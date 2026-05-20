@@ -15,6 +15,8 @@
 
 import { getComposio, getComposioConnectedAccountId } from './composio';
 import getDb from './db';
+import { getGoogleSheetsClient } from './google-sheets';
+import { getSheetSyncProvider } from './sheet-sync-config';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
 const SHEET_TAB = process.env.GOOGLE_SHEET_TAB || 'Master Tracker';
@@ -118,34 +120,149 @@ async function executeTool(toolSlug: string, args: Record<string, unknown>, user
   }
 }
 
+async function readSheetRows(): Promise<string[][]> {
+  const provider = getSheetSyncProvider();
+
+  if (provider === 'google_service_account') {
+    const sheets = getGoogleSheetsClient();
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!A1:Z2000`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+    return (response.data.values ?? []) as string[][];
+  }
+
+  if (provider === 'composio') {
+    const userId = process.env.COMPOSIO_USER_ID || 'default';
+    const sheetResp = await executeTool(
+      'GOOGLESHEETS_BATCH_GET',
+      {
+        spreadsheet_id: SHEET_ID,
+        ranges: [`'${SHEET_TAB}'!A1:Z2000`],
+        valueRenderOption: 'FORMATTED_VALUE',
+      },
+      userId,
+    );
+
+    const r = sheetResp as any;
+    const valueRanges = r?.data?.valueRanges ?? r?.valueRanges ?? r?.data?.response?.data?.valueRanges ?? [];
+    return valueRanges[0]?.values ?? [];
+  }
+
+  throw new Error('Sheet sync is disabled.');
+}
+
+async function upsertRowsToSheet(rows: string[][]): Promise<void> {
+  const provider = getSheetSyncProvider();
+
+  if (provider === 'composio') {
+    const userId = process.env.COMPOSIO_USER_ID || 'default';
+    await executeTool(
+      'GOOGLESHEETS_UPSERT_ROWS',
+      {
+        spreadsheetId: SHEET_ID,
+        sheetName: SHEET_TAB,
+        headers: CANONICAL_HEADER,
+        keyColumn: 'Store Code',
+        rows,
+        strictMode: false,
+      },
+      userId,
+    );
+    return;
+  }
+
+  if (provider !== 'google_service_account') {
+    throw new Error('Sheet sync is disabled.');
+  }
+
+  const rawRows = await readSheetRows();
+  if (rawRows.length === 0) {
+    throw new Error(`Push stopped because the sheet tab "${SHEET_TAB}" is empty or inaccessible.`);
+  }
+  const headerRowIdx = findHeaderRow(rawRows);
+  const headerCells = rawRows[headerRowIdx].map((h) => norm(h));
+  const colIdx = getColumnIndexes(headerCells);
+
+  const missingHeaders = COLUMNS.filter((c) => colIdx[c] < 0).map((c) => COLUMN_HEADERS[c][0]);
+  if (missingHeaders.length > 0) {
+    throw new Error(
+      `Push stopped because the sheet is missing expected sync header(s): ${missingHeaders.join(', ')}. ` +
+        'Add those headers to the Master Tracker sheet before pushing so the app does not update wrong columns.',
+    );
+  }
+
+  const keyIdx = colIdx.store_code;
+  const sheetRowByCode = new Map<string, { sheetRowNumber: number; values: string[] }>();
+  for (let i = headerRowIdx + 1; i < rawRows.length; i++) {
+    const code = (rawRows[i][keyIdx] ?? '').toString().trim();
+    if (code) sheetRowByCode.set(code, { sheetRowNumber: i + 1, values: rawRows[i] });
+  }
+
+  const sheets = getGoogleSheetsClient();
+  const minCol = Math.min(...COLUMNS.map((c) => colIdx[c]));
+  const maxCol = Math.max(...COLUMNS.map((c) => colIdx[c]));
+  const updateRanges: Array<{ range: string; values: string[][] }> = [];
+  const appendRows: string[][] = [];
+
+  for (const row of rows) {
+    const code = row[COLUMNS.indexOf('store_code')].trim();
+    if (!code) continue;
+
+    const existing = sheetRowByCode.get(code);
+    if (existing) {
+      const next = existing.values.slice(minCol, maxCol + 1);
+      for (let i = 0; i < COLUMNS.length; i++) {
+        next[colIdx[COLUMNS[i]] - minCol] = row[i] ?? '';
+      }
+      updateRanges.push({
+        range: `'${SHEET_TAB}'!${columnLetter(minCol)}${existing.sheetRowNumber}:${columnLetter(maxCol)}${existing.sheetRowNumber}`,
+        values: [next],
+      });
+    } else {
+      const next = new Array(Math.max(rawRows[headerRowIdx].length, maxCol + 1)).fill('');
+      for (let i = 0; i < COLUMNS.length; i++) {
+        next[colIdx[COLUMNS[i]]] = row[i] ?? '';
+      }
+      appendRows.push(next);
+    }
+  }
+
+  if (updateRanges.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: updateRanges,
+      },
+    });
+  }
+
+  if (appendRows.length > 0) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!A1`,
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: appendRows },
+    });
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // PUSH (DB → Sheet)
 // ────────────────────────────────────────────────────────────
 
 export async function pushAllToSheet(): Promise<{ pushed: number }> {
   const db = getDb();
-  const userId = process.env.COMPOSIO_USER_ID || 'default';
 
   const result = await db.execute(
     `SELECT ${COLUMNS.join(', ')} FROM tracker_locations ORDER BY country, business_name`,
   );
   const rows = (result.rows as unknown as Record<string, unknown>[]).map(toSheetRow);
 
-  // Partial upsert — UPSERT_ROWS matches by keyColumn and updates only the
-  // header columns we send. Other sheet columns (Phil Verified Lat/Lng,
-  // Coord Flag, etc.) are preserved.
-  await executeTool(
-    'GOOGLESHEETS_UPSERT_ROWS',
-    {
-      spreadsheetId: SHEET_ID,
-      sheetName: SHEET_TAB,
-      headers: CANONICAL_HEADER,
-      keyColumn: 'Store Code',
-      rows,
-      strictMode: false,
-    },
-    userId,
-  );
+  await upsertRowsToSheet(rows);
 
   await db.execute(`UPDATE tracker_locations SET sheet_synced_at = NOW()`);
 
@@ -166,6 +283,29 @@ interface PullSummary {
 
 const norm = (s: string) => (s ?? '').toString().toLowerCase().replace(/[\s_\-\n]/g, '');
 
+function columnLetter(index: number): string {
+  let n = index + 1;
+  let letters = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
+function getColumnIndexes(headerCells: string[]): Record<Column, number> {
+  const indexForColumn = (col: Column): number => {
+    for (const alias of COLUMN_HEADERS[col]) {
+      const ni = headerCells.indexOf(norm(alias));
+      if (ni >= 0) return ni;
+    }
+    return -1;
+  };
+
+  return Object.fromEntries(COLUMNS.map((c) => [c, indexForColumn(c)])) as Record<Column, number>;
+}
+
 /**
  * Scan the first N rows for one that contains "Store Code" — handles
  * sheets with a banner / legend / edit-rules block above the real header.
@@ -184,23 +324,8 @@ function findHeaderRow(rows: string[][], maxScan = 10): number {
 }
 
 export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
-  const userId = process.env.COMPOSIO_USER_ID || 'default';
   const db = getDb();
-
-  const sheetResp = await executeTool(
-    'GOOGLESHEETS_BATCH_GET',
-    {
-      spreadsheet_id: SHEET_ID,
-      ranges: [`'${SHEET_TAB}'!A1:Z2000`],
-      valueRenderOption: 'FORMATTED_VALUE',
-    },
-    userId,
-  );
-
-  // Response shape from Composio: { data: { valueRanges: [{ values: [[...]] }] } }
-  const r = sheetResp as any;
-  const valueRanges = r?.data?.valueRanges ?? r?.valueRanges ?? r?.data?.response?.data?.valueRanges ?? [];
-  const rawRows: string[][] = valueRanges[0]?.values ?? [];
+  const rawRows = await readSheetRows();
 
   if (rawRows.length < 2) {
     return { total_sheet_rows: 0, updated: 0, unchanged: 0, not_in_db: [], applied_changes: [] };
@@ -210,17 +335,7 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
   const headerRowIdx = findHeaderRow(rawRows);
   const headerCells = rawRows[headerRowIdx].map((h) => norm(h));
 
-  const indexForColumn = (col: Column): number => {
-    for (const alias of COLUMN_HEADERS[col]) {
-      const ni = headerCells.indexOf(norm(alias));
-      if (ni >= 0) return ni;
-    }
-    return -1;
-  };
-
-  const colIdx: Record<Column, number> = Object.fromEntries(
-    COLUMNS.map((c) => [c, indexForColumn(c)]),
-  ) as Record<Column, number>;
+  const colIdx = getColumnIndexes(headerCells);
 
   if (colIdx.store_code < 0) {
     throw new Error(

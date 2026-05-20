@@ -4,7 +4,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { Card, CardHeader } from '@/components/ui/Card';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
-import { isSyncEnabled } from '@/lib/composio';
+import { getSheetSyncProvider, isSheetSyncEnabled } from '@/lib/sheet-sync-config';
 import { isGeocodingEnabled } from '@/lib/geocode';
 import { SyncPanel } from '@/components/settings/SyncPanel';
 import { GeocodePanel } from '@/components/settings/GeocodePanel';
@@ -53,7 +53,8 @@ function StatRow({ label, value }: { label: string; value: number | string }) {
 
 export default async function SettingsPage() {
   const data = await getSettingsData();
-  const syncEnabled = isSyncEnabled();
+  const syncEnabled = isSheetSyncEnabled();
+  const syncProvider = getSheetSyncProvider();
   const geocodingEnabled = isGeocodingEnabled();
   const sheetId = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
   const sheetUrl = sheetId ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit` : null;
@@ -105,7 +106,7 @@ export default async function SettingsPage() {
             <StatRow label="Framework" value="Next.js 14 (App Router)" />
             <StatRow label="Database" value="PostgreSQL via Supabase" />
             <StatRow label="Deployment" value="Vercel (Next.js serverless)" />
-            <StatRow label="Sheet sync" value={syncEnabled ? 'Enabled' : 'Disabled (env vars missing)'} />
+            <StatRow label="Sheet sync" value={syncEnabled ? `Enabled (${syncProvider})` : 'Disabled (env vars missing)'} />
           </div>
         </Card>
 
