@@ -22,6 +22,16 @@ interface PullPreview {
   applied_changes: Array<{ store_code: string; changes: Record<string, [unknown, unknown]> }>;
 }
 
+async function readApiResponse(res: Response) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(text.slice(0, 500));
+  }
+}
+
 export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' });
   const [preview, setPreview] = useState<PullPreview | null>(null);
@@ -31,7 +41,7 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
     setStatus({ kind: 'running', op: 'push' });
     try {
       const res = await fetch('/api/sync/push', { method: 'POST' });
-      const json = await res.json();
+      const json = await readApiResponse(res);
       if (!res.ok) throw new Error(json.error || 'Push failed');
       setStatus({ kind: 'success', op: 'push', message: `Pushed ${json.pushed} rows to the Sheet.` });
     } catch (e) {
@@ -44,7 +54,7 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
     setPreview(null);
     try {
       const res = await fetch('/api/sync/pull', { method: 'GET' });
-      const json = await res.json();
+      const json = await readApiResponse(res);
       if (!res.ok) throw new Error(json.error || 'Preview failed');
       setPreview(json);
       setStatus({ kind: 'idle' });
@@ -59,7 +69,7 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
     setStatus({ kind: 'running', op: 'pull' });
     try {
       const res = await fetch('/api/sync/pull', { method: 'POST' });
-      const json = await res.json();
+      const json = await readApiResponse(res);
       if (!res.ok) throw new Error(json.error || 'Pull failed');
       setStatus({
         kind: 'success',

@@ -409,7 +409,7 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
   }
 
   if (!dryRun) {
-    for (const { store_code, changes } of applied) {
+    const statements = applied.map(({ store_code, changes }) => {
       const fields = Object.keys(changes);
       const setClauses = fields.map((f) => `${f} = ?`);
       setClauses.push('sheet_synced_at = NOW()');
@@ -417,10 +417,15 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
         const v = changes[f][1];
         return v === '' ? null : v;
       });
-      await db.execute({
+      return {
         sql: `UPDATE tracker_locations SET ${setClauses.join(', ')} WHERE store_code = ?`,
         args: [...values, store_code],
-      });
+      };
+    });
+
+    const chunkSize = 100;
+    for (let i = 0; i < statements.length; i += chunkSize) {
+      await db.batch(statements.slice(i, i + chunkSize));
     }
   }
 
