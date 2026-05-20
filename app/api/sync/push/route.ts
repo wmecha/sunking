@@ -9,7 +9,10 @@ import { logAction } from '@/lib/audit';
 export async function POST() {
   if (!isSyncEnabled()) {
     return NextResponse.json(
-      { error: 'Sync disabled. Set COMPOSIO_API_KEY and COMPOSIO_USER_ID on Vercel.' },
+      {
+        error:
+          'Sync disabled. Set COMPOSIO_API_KEY and either COMPOSIO_USER_ID or COMPOSIO_CONNECTED_ACCOUNT_ID on Vercel.',
+      },
       { status: 503 },
     );
   }

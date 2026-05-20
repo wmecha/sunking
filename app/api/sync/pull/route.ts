@@ -10,7 +10,10 @@ export async function GET() {
   // Dry-run preview
   if (!isSyncEnabled()) {
     return NextResponse.json(
-      { error: 'Sync disabled. Set COMPOSIO_API_KEY and COMPOSIO_USER_ID on Vercel.' },
+      {
+        error:
+          'Sync disabled. Set COMPOSIO_API_KEY and either COMPOSIO_USER_ID or COMPOSIO_CONNECTED_ACCOUNT_ID on Vercel.',
+      },
       { status: 503 },
     );
   }
@@ -27,7 +30,10 @@ export async function GET() {
 export async function POST(_req: NextRequest) {
   if (!isSyncEnabled()) {
     return NextResponse.json(
-      { error: 'Sync disabled. Set COMPOSIO_API_KEY and COMPOSIO_USER_ID on Vercel.' },
+      {
+        error:
+          'Sync disabled. Set COMPOSIO_API_KEY and either COMPOSIO_USER_ID or COMPOSIO_CONNECTED_ACCOUNT_ID on Vercel.',
+      },
       { status: 503 },
     );
   }

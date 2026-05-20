@@ -5,6 +5,8 @@
  *   COMPOSIO_API_KEY    — your Composio API key
  *   COMPOSIO_USER_ID    — the user_id that owns the Google Sheets connection
  *                         (typically your email address, e.g. admin@wallacemecha.com)
+ *   COMPOSIO_CONNECTED_ACCOUNT_ID — optional; pins sync to one active Google
+ *                         Sheets connected account and avoids user-id mismatch.
  *
  * Throws a clear error if not configured so the calling endpoint can return 503.
  */
@@ -35,7 +37,14 @@ export function getComposioUserId(): string {
   return userId;
 }
 
+export function getComposioConnectedAccountId(): string | undefined {
+  return process.env.COMPOSIO_CONNECTED_ACCOUNT_ID || undefined;
+}
+
 /** True if both env vars are present — used to hide the Sync UI when sync is disabled. */
 export function isSyncEnabled(): boolean {
-  return Boolean(process.env.COMPOSIO_API_KEY && process.env.COMPOSIO_USER_ID);
+  return Boolean(
+    process.env.COMPOSIO_API_KEY &&
+      (process.env.COMPOSIO_USER_ID || process.env.COMPOSIO_CONNECTED_ACCOUNT_ID),
+  );
 }

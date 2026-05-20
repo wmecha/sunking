@@ -13,7 +13,7 @@
  *   so existing sheets with slightly different labels still match.
  */
 
-import { getComposio, getComposioUserId } from './composio';
+import { getComposio, getComposioConnectedAccountId } from './composio';
 import getDb from './db';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
@@ -94,9 +94,11 @@ function normalizeSheetValue(column: Column, value: string): string {
  */
 async function executeTool(toolSlug: string, args: Record<string, unknown>, userId: string) {
   const composio = getComposio();
+  const connectedAccountId = getComposioConnectedAccountId();
   try {
     return await composio.tools.execute(toolSlug, {
       userId,
+      ...(connectedAccountId ? { connectedAccountId } : {}),
       version: 'latest',
       dangerouslySkipVersionCheck: true,
       arguments: args,
@@ -122,7 +124,7 @@ async function executeTool(toolSlug: string, args: Record<string, unknown>, user
 
 export async function pushAllToSheet(): Promise<{ pushed: number }> {
   const db = getDb();
-  const userId = getComposioUserId();
+  const userId = process.env.COMPOSIO_USER_ID || 'default';
 
   const result = await db.execute(
     `SELECT ${COLUMNS.join(', ')} FROM tracker_locations ORDER BY country, business_name`,
@@ -182,7 +184,7 @@ function findHeaderRow(rows: string[][], maxScan = 10): number {
 }
 
 export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
-  const userId = getComposioUserId();
+  const userId = process.env.COMPOSIO_USER_ID || 'default';
   const db = getDb();
 
   const sheetResp = await executeTool(

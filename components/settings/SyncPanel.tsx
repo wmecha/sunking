@@ -80,7 +80,8 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
           <p className="font-semibold">Sheet sync is disabled.</p>
           <p className="text-amber-800 mt-1">
             Set <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">COMPOSIO_API_KEY</code> and{' '}
-            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">COMPOSIO_USER_ID</code> on Vercel
+            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">COMPOSIO_USER_ID</code> or{' '}
+            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">COMPOSIO_CONNECTED_ACCOUNT_ID</code> on Vercel
             (and redeploy) to enable the buttons below.
           </p>
         </div>
