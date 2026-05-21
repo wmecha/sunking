@@ -10,9 +10,9 @@ interface SyncPanelProps {
 
 type SyncStatus =
   | { kind: 'idle' }
-  | { kind: 'running'; op: 'push' | 'pull' | 'preview' }
+  | { kind: 'running'; op: 'push' | 'pull' | 'preview' | 'push-preview' }
   | { kind: 'success'; op: 'push' | 'pull'; message: string }
-  | { kind: 'error'; op: 'push' | 'pull' | 'preview'; message: string };
+  | { kind: 'error'; op: 'push' | 'pull' | 'preview' | 'push-preview'; message: string };
 
 interface PullPreview {
   total_sheet_rows: number;
@@ -21,6 +21,17 @@ interface PullPreview {
   not_in_db: string[];
   applied_changes: Array<{ store_code: string; changes: Record<string, [unknown, unknown]> }>;
 }
+
+interface PushPreview {
+  total_db_rows: number;
+  updated: number;
+  appended: number;
+  unchanged: number;
+  applied_changes: Array<{ store_code: string; mode: 'update' | 'append'; changes: Record<string, [unknown, unknown]> }>;
+}
+
+const SYNC_STEP_SIZE = 1;
+const SYNC_STEP_DELAY_MS = 150;
 
 async function readApiResponse(res: Response) {
   const text = await res.text();
@@ -32,18 +43,58 @@ async function readApiResponse(res: Response) {
   }
 }
 
+function pause(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' });
   const [preview, setPreview] = useState<PullPreview | null>(null);
+  const [pushPreview, setPushPreview] = useState<PushPreview | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [showAllPushChanges, setShowAllPushChanges] = useState(false);
+  const [showAllPullChanges, setShowAllPullChanges] = useState(false);
 
-  async function handlePush() {
-    if (!confirm('This will overwrite the Master Tracker sheet with the current DB state. Continue?')) return;
-    setStatus({ kind: 'running', op: 'push' });
+  async function handlePushPreview() {
+    setStatus({ kind: 'running', op: 'push-preview' });
+    setPushPreview(null);
+    setShowAllPushChanges(false);
+    setProgress(null);
     try {
-      const res = await fetch('/api/sync/push', { method: 'POST' });
+      const res = await fetch('/api/sync/push', { method: 'GET' });
       const json = await readApiResponse(res);
-      if (!res.ok) throw new Error(json.error || 'Push failed');
-      setStatus({ kind: 'success', op: 'push', message: `Pushed ${json.pushed} rows to the Sheet.` });
+      if (!res.ok) throw new Error(json.error || 'Push preview failed');
+      setPushPreview(json);
+      setStatus({ kind: 'idle' });
+    } catch (e) {
+      setStatus({ kind: 'error', op: 'push-preview', message: e instanceof Error ? e.message : 'Push preview failed' });
+    }
+  }
+
+  async function handlePushApply() {
+    if (!pushPreview) return;
+    const changes = pushPreview.applied_changes;
+    if (!confirm(`Apply ${changes.length} Sheet update(s), one at a time?`)) return;
+    setStatus({ kind: 'running', op: 'push' });
+    setProgress({ done: 0, total: changes.length });
+    try {
+      let pushed = 0;
+      for (let i = 0; i < changes.length; i += SYNC_STEP_SIZE) {
+        const chunk = changes.slice(i, i + SYNC_STEP_SIZE);
+        const res = await fetch('/api/sync/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ store_codes: chunk.map((c) => c.store_code) }),
+        });
+        const json = await readApiResponse(res);
+        if (!res.ok) throw new Error(json.error || 'Push failed');
+        pushed += Number(json.pushed ?? 0);
+        setProgress({ done: Math.min(i + chunk.length, changes.length), total: changes.length });
+        if (i + chunk.length < changes.length) await pause(SYNC_STEP_DELAY_MS);
+      }
+      setStatus({ kind: 'success', op: 'push', message: `Pushed ${pushed} row update(s) to the Sheet.` });
+      setPushPreview(null);
+      setProgress(null);
     } catch (e) {
       setStatus({ kind: 'error', op: 'push', message: e instanceof Error ? e.message : 'Push failed' });
     }
@@ -52,6 +103,8 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   async function handlePreview() {
     setStatus({ kind: 'running', op: 'preview' });
     setPreview(null);
+    setShowAllPullChanges(false);
+    setProgress(null);
     try {
       const res = await fetch('/api/sync/pull', { method: 'GET' });
       const json = await readApiResponse(res);
@@ -65,18 +118,32 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
 
   async function handlePullApply() {
     if (!preview) return;
-    if (!confirm(`Apply ${preview.updated} row update(s) from the Sheet to the DB?`)) return;
+    const changes = preview.applied_changes;
+    if (!confirm(`Apply ${changes.length} DB update(s), one at a time?`)) return;
     setStatus({ kind: 'running', op: 'pull' });
+    setProgress({ done: 0, total: changes.length });
     try {
-      const res = await fetch('/api/sync/pull', { method: 'POST' });
-      const json = await readApiResponse(res);
-      if (!res.ok) throw new Error(json.error || 'Pull failed');
+      let applied = 0;
+      for (let i = 0; i < changes.length; i += SYNC_STEP_SIZE) {
+        const chunk = changes.slice(i, i + SYNC_STEP_SIZE);
+        const res = await fetch('/api/sync/pull', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates: chunk }),
+        });
+        const json = await readApiResponse(res);
+        if (!res.ok) throw new Error(json.error || 'Pull failed');
+        applied += Number(json.updated ?? 0);
+        setProgress({ done: Math.min(i + chunk.length, changes.length), total: changes.length });
+        if (i + chunk.length < changes.length) await pause(SYNC_STEP_DELAY_MS);
+      }
       setStatus({
         kind: 'success',
         op: 'pull',
-        message: `Applied ${json.updated} update(s). ${json.unchanged} unchanged. ${json.not_in_db.length} sheet row(s) had no matching DB record.`,
+        message: `Applied ${applied} update(s). ${preview.unchanged} unchanged. ${preview.not_in_db.length} sheet row(s) had no matching DB record.`,
       });
       setPreview(null);
+      setProgress(null);
     } catch (e) {
       setStatus({ kind: 'error', op: 'pull', message: e instanceof Error ? e.message : 'Pull failed' });
     }
@@ -98,6 +165,12 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   }
 
   const isRunning = status.kind === 'running';
+  const visiblePushChanges = pushPreview
+    ? pushPreview.applied_changes.slice(0, showAllPushChanges ? pushPreview.applied_changes.length : 20)
+    : [];
+  const visiblePullChanges = preview
+    ? preview.applied_changes.slice(0, showAllPullChanges ? preview.applied_changes.length : 20)
+    : [];
 
   return (
     <div className="space-y-4">
@@ -118,20 +191,34 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
             <h3 className="text-sm font-semibold text-[#1C2B3A]">Push DB → Sheet</h3>
           </div>
           <p className="text-xs text-gray-500 mb-3">
-            Overwrites all rows in the Master Tracker sheet with the current DB state.
-            Matched by Store Code (upserts).
+            Previews DB-to-Sheet differences first, then applies matching Store Code updates one row at a time.
           </p>
-          <button
-            onClick={handlePush}
-            disabled={isRunning}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold rounded-md bg-[#1C2B3A] text-white hover:bg-[#0F1B2A] disabled:opacity-50 transition-colors"
-          >
-            {status.kind === 'running' && status.op === 'push' ? (
-              <><Loader2 size={14} className="animate-spin" /> Pushing...</>
-            ) : (
-              <><ArrowUpCircle size={14} /> Push all to Sheet</>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={handlePushPreview}
+              disabled={isRunning}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold rounded-md border border-[#1C2B3A] text-[#1C2B3A] hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {status.kind === 'running' && status.op === 'push-preview' ? (
+                <><Loader2 size={14} className="animate-spin" /> Loading preview...</>
+              ) : (
+                <><RefreshCw size={14} /> Preview Sheet changes</>
+              )}
+            </button>
+            {pushPreview && pushPreview.applied_changes.length > 0 && (
+              <button
+                onClick={handlePushApply}
+                disabled={isRunning}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold rounded-md bg-[#1C2B3A] text-white hover:bg-[#0F1B2A] disabled:opacity-50 transition-colors"
+              >
+                {status.kind === 'running' && status.op === 'push' ? (
+                  <><Loader2 size={14} className="animate-spin" /> Pushing...</>
+                ) : (
+                  <><ArrowUpCircle size={14} /> Apply {pushPreview.applied_changes.length} Sheet update(s)</>
+                )}
+              </button>
             )}
-          </button>
+          </div>
         </div>
 
         {/* Pull buttons */}
@@ -190,6 +277,66 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
         </div>
       )}
 
+      {progress && (
+        <div className="border border-[#E5E7EB] rounded-md p-3 bg-white text-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium text-[#1C2B3A]">
+              {status.kind === 'running' && status.op === 'push' ? 'Pushing to Sheet' : 'Pulling into DB'}
+            </span>
+            <span className="text-xs tabular-nums text-gray-500">
+              {progress.done} done · {Math.max(progress.total - progress.done, 0)} remaining
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className="h-full bg-[#F5C000] transition-all"
+              style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {pushPreview && (
+        <div className="border border-[#E5E7EB] rounded-md p-4 bg-gray-50 text-sm">
+          <div className="grid grid-cols-4 gap-3 mb-3">
+            <Stat label="Rows in DB" value={pushPreview.total_db_rows} />
+            <Stat label="Will update" value={pushPreview.updated} highlight={pushPreview.updated > 0} />
+            <Stat label="Will append" value={pushPreview.appended} highlight={pushPreview.appended > 0} />
+            <Stat label="Unchanged" value={pushPreview.unchanged} />
+          </div>
+          {pushPreview.applied_changes.length > 0 && (
+            <div className="max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded p-2">
+              {visiblePushChanges.map(({ store_code, mode, changes }) => (
+                <div key={store_code} className="text-xs py-1.5 border-b last:border-0 border-[#E5E7EB]">
+                  <div className="font-mono font-semibold text-[#1C2B3A]">
+                    {store_code} <span className="font-sans text-[10px] uppercase text-gray-400">({mode})</span>
+                  </div>
+                  {Object.entries(changes).map(([field, [oldV, newV]]) => (
+                    <div key={field} className="ml-3 text-gray-600">
+                      <span className="text-gray-400">{field}:</span>{' '}
+                      <span className="line-through text-red-600">{String(oldV) || '(empty)'}</span>
+                      {' → '}
+                      <span className="text-green-700">{String(newV) || '(empty)'}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {pushPreview.applied_changes.length > 20 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPushChanges((v) => !v)}
+                  className="w-full text-xs text-[#1C2B3A] hover:text-[#F5C000] font-medium text-center pt-2"
+                >
+                  {showAllPushChanges
+                    ? 'Show first 20 only'
+                    : `Show all ${pushPreview.applied_changes.length} proposed Sheet changes`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Preview details */}
       {preview && (
         <div className="border border-[#E5E7EB] rounded-md p-4 bg-gray-50 text-sm">
@@ -208,7 +355,7 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
           )}
           {preview.applied_changes.length > 0 && (
             <div className="max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded p-2">
-              {preview.applied_changes.slice(0, 20).map(({ store_code, changes }) => (
+              {visiblePullChanges.map(({ store_code, changes }) => (
                 <div key={store_code} className="text-xs py-1.5 border-b last:border-0 border-[#E5E7EB]">
                   <div className="font-mono font-semibold text-[#1C2B3A]">{store_code}</div>
                   {Object.entries(changes).map(([field, [oldV, newV]]) => (
@@ -222,9 +369,15 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
                 </div>
               ))}
               {preview.applied_changes.length > 20 && (
-                <p className="text-xs text-gray-400 text-center pt-2">
-                  …and {preview.applied_changes.length - 20} more
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAllPullChanges((v) => !v)}
+                  className="w-full text-xs text-[#1C2B3A] hover:text-[#F5C000] font-medium text-center pt-2"
+                >
+                  {showAllPullChanges
+                    ? 'Show first 20 only'
+                    : `Show all ${preview.applied_changes.length} proposed DB changes`}
+                </button>
               )}
             </div>
           )}

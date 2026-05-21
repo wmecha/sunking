@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { pullFromSheet } from '@/lib/sheet-sync';
+import { applyPullChanges, pullFromSheet } from '@/lib/sheet-sync';
 import { getSheetSyncDisabledReason, isSheetSyncEnabled } from '@/lib/sheet-sync-config';
 import { logAction } from '@/lib/audit';
 
@@ -24,7 +24,7 @@ export async function GET() {
   }
 }
 
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
   if (!isSheetSyncEnabled()) {
     return NextResponse.json(
       { error: getSheetSyncDisabledReason() },
@@ -32,6 +32,17 @@ export async function POST(_req: NextRequest) {
     );
   }
   try {
+    const body = await req.json().catch(() => ({}));
+    const updates = Array.isArray(body?.updates) ? body.updates : null;
+
+    if (updates) {
+      const result = await applyPullChanges(updates);
+      await logAction('sync_pull_from_sheet_chunk', {
+        applied: result.applied,
+      });
+      return NextResponse.json({ ok: true, dryRun: false, updated: result.applied });
+    }
+
     const result = await pullFromSheet(false);
     await logAction('sync_pull_from_sheet', {
       updated: result.updated,

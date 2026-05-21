@@ -68,6 +68,33 @@ const CANONICAL_HEADER: string[] = COLUMNS.map((c) => COLUMN_HEADERS[c][0]);
 
 type Row = Record<Column, string>;
 
+interface PullChange {
+  store_code: string;
+  changes: Record<string, [unknown, unknown]>;
+}
+
+interface PullSummary {
+  total_sheet_rows: number;
+  updated: number;
+  unchanged: number;
+  not_in_db: string[];
+  applied_changes: PullChange[];
+}
+
+interface PushChange {
+  store_code: string;
+  mode: 'update' | 'append';
+  changes: Record<string, [unknown, unknown]>;
+}
+
+interface PushSummary {
+  total_db_rows: number;
+  updated: number;
+  appended: number;
+  unchanged: number;
+  applied_changes: PushChange[];
+}
+
 function toSheetRow(r: Record<string, unknown>): string[] {
   return COLUMNS.map((c) => {
     const v = r[c];
@@ -153,30 +180,48 @@ async function readSheetRows(): Promise<string[][]> {
   throw new Error('Sheet sync is disabled.');
 }
 
-async function upsertRowsToSheet(rows: string[][]): Promise<void> {
+function sheetRowToObject(row: string[], colIdx: Record<Column, number>): Row {
+  const obj = {} as Row;
+  for (const c of COLUMNS) {
+    const idx = colIdx[c];
+    obj[c] = idx >= 0 ? (row[idx] ?? '').toString() : '';
+  }
+  return obj;
+}
+
+function diffRows(nextRow: string[], existingRow?: Row): Record<string, [unknown, unknown]> {
+  const changes: Record<string, [unknown, unknown]> = {};
+  for (let i = 0; i < COLUMNS.length; i++) {
+    const col = COLUMNS[i];
+    const nextVal = (nextRow[i] ?? '').toString().trim();
+    const oldVal = (existingRow?.[col] ?? '').toString().trim();
+    if (nextVal !== oldVal) changes[col] = [oldVal, nextVal];
+  }
+  return changes;
+}
+
+async function getDbSheetRows(): Promise<string[][]> {
+  const db = getDb();
+  const result = await db.execute(
+    `SELECT ${COLUMNS.join(', ')} FROM tracker_locations ORDER BY country, business_name`,
+  );
+  return (result.rows as unknown as Record<string, unknown>[]).map(toSheetRow);
+}
+
+async function buildPushPlan(): Promise<{
+  rows: string[][];
+  rawRows: string[][];
+  headerRowIdx: number;
+  colIdx: Record<Column, number>;
+  changes: PushChange[];
+}> {
   const provider = getSheetSyncProvider();
 
-  if (provider === 'composio') {
-    const userId = process.env.COMPOSIO_USER_ID || 'default';
-    await executeTool(
-      'GOOGLESHEETS_UPSERT_ROWS',
-      {
-        spreadsheetId: SHEET_ID,
-        sheetName: SHEET_TAB,
-        headers: CANONICAL_HEADER,
-        keyColumn: 'Store Code',
-        rows,
-        strictMode: false,
-      },
-      userId,
-    );
-    return;
-  }
-
-  if (provider !== 'google_service_account') {
+  if (provider !== 'google_service_account' && provider !== 'composio') {
     throw new Error('Sheet sync is disabled.');
   }
 
+  const rows = await getDbSheetRows();
   const rawRows = await readSheetRows();
   if (rawRows.length === 0) {
     throw new Error(`Push stopped because the sheet tab "${SHEET_TAB}" is empty or inaccessible.`);
@@ -194,6 +239,60 @@ async function upsertRowsToSheet(rows: string[][]): Promise<void> {
   }
 
   const keyIdx = colIdx.store_code;
+  const sheetRowByCode = new Map<string, Row>();
+  for (let i = headerRowIdx + 1; i < rawRows.length; i++) {
+    const code = (rawRows[i][keyIdx] ?? '').toString().trim();
+    if (code) sheetRowByCode.set(code, sheetRowToObject(rawRows[i], colIdx));
+  }
+
+  const changes: PushChange[] = [];
+  for (const row of rows) {
+    const code = row[COLUMNS.indexOf('store_code')].trim();
+    if (!code) continue;
+    const existing = sheetRowByCode.get(code);
+    const diff = diffRows(row, existing);
+    if (Object.keys(diff).length === 0) continue;
+    changes.push({
+      store_code: code,
+      mode: existing ? 'update' : 'append',
+      changes: diff,
+    });
+  }
+
+  return { rows, rawRows, headerRowIdx, colIdx, changes };
+}
+
+async function upsertRowsToSheet(storeCodes?: string[]): Promise<{ updated: number; appended: number; pushed: number }> {
+  const provider = getSheetSyncProvider();
+
+  if (provider === 'composio') {
+    const rows = await getDbSheetRows();
+    const selected = storeCodes?.length
+      ? rows.filter((row) => storeCodes.includes(row[COLUMNS.indexOf('store_code')].trim()))
+      : rows;
+    const userId = process.env.COMPOSIO_USER_ID || 'default';
+    await executeTool(
+      'GOOGLESHEETS_UPSERT_ROWS',
+      {
+        spreadsheetId: SHEET_ID,
+        sheetName: SHEET_TAB,
+        headers: CANONICAL_HEADER,
+        keyColumn: 'Store Code',
+        rows: selected,
+        strictMode: false,
+      },
+      userId,
+    );
+    return { updated: selected.length, appended: 0, pushed: selected.length };
+  }
+
+  const { rows, rawRows, headerRowIdx, colIdx } = await buildPushPlan();
+  const wanted = storeCodes?.length ? new Set(storeCodes) : null;
+  const selectedRows = wanted
+    ? rows.filter((row) => wanted.has(row[COLUMNS.indexOf('store_code')].trim()))
+    : rows;
+
+  const keyIdx = colIdx.store_code;
   const sheetRowByCode = new Map<string, { sheetRowNumber: number; values: string[] }>();
   for (let i = headerRowIdx + 1; i < rawRows.length; i++) {
     const code = (rawRows[i][keyIdx] ?? '').toString().trim();
@@ -206,7 +305,7 @@ async function upsertRowsToSheet(rows: string[][]): Promise<void> {
   const updateRanges: Array<{ range: string; values: string[][] }> = [];
   const appendRows: string[][] = [];
 
-  for (const row of rows) {
+  for (const row of selectedRows) {
     const code = row[COLUMNS.indexOf('store_code')].trim();
     if (!code) continue;
 
@@ -248,38 +347,52 @@ async function upsertRowsToSheet(rows: string[][]): Promise<void> {
       requestBody: { values: appendRows },
     });
   }
+
+  return {
+    updated: updateRanges.length,
+    appended: appendRows.length,
+    pushed: updateRanges.length + appendRows.length,
+  };
 }
 
 // ────────────────────────────────────────────────────────────
 // PUSH (DB → Sheet)
 // ────────────────────────────────────────────────────────────
 
-export async function pushAllToSheet(): Promise<{ pushed: number }> {
-  const db = getDb();
+export async function previewPushToSheet(): Promise<PushSummary> {
+  const plan = await buildPushPlan();
+  const changedCodes = new Set(plan.changes.map((c) => c.store_code));
+  return {
+    total_db_rows: plan.rows.filter((row) => row[COLUMNS.indexOf('store_code')].trim()).length,
+    updated: plan.changes.filter((c) => c.mode === 'update').length,
+    appended: plan.changes.filter((c) => c.mode === 'append').length,
+    unchanged: plan.rows.filter((row) => {
+      const code = row[COLUMNS.indexOf('store_code')].trim();
+      return code && !changedCodes.has(code);
+    }).length,
+    applied_changes: plan.changes,
+  };
+}
 
-  const result = await db.execute(
-    `SELECT ${COLUMNS.join(', ')} FROM tracker_locations ORDER BY country, business_name`,
-  );
-  const rows = (result.rows as unknown as Record<string, unknown>[]).map(toSheetRow);
+export async function pushAllToSheet(storeCodes?: string[]): Promise<{ pushed: number; updated: number; appended: number }> {
+  const result = await upsertRowsToSheet(storeCodes);
+  if (result.pushed > 0) {
+    const db = getDb();
+    const where = storeCodes?.length
+      ? ` WHERE store_code IN (${storeCodes.map(() => '?').join(',')})`
+      : '';
+    await db.execute({
+      sql: `UPDATE tracker_locations SET sheet_synced_at = NOW()${where}`,
+      args: storeCodes ?? [],
+    });
+  }
 
-  await upsertRowsToSheet(rows);
-
-  await db.execute(`UPDATE tracker_locations SET sheet_synced_at = NOW()`);
-
-  return { pushed: rows.length };
+  return result;
 }
 
 // ────────────────────────────────────────────────────────────
 // PULL (Sheet → DB)
 // ────────────────────────────────────────────────────────────
-
-interface PullSummary {
-  total_sheet_rows: number;
-  updated: number;
-  unchanged: number;
-  not_in_db: string[];
-  applied_changes: Array<{ store_code: string; changes: Record<string, [unknown, unknown]> }>;
-}
 
 const norm = (s: string) => (s ?? '').toString().toLowerCase().replace(/[\s_\-\n]/g, '');
 
@@ -409,7 +522,22 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
   }
 
   if (!dryRun) {
-    const statements = applied.map(({ store_code, changes }) => {
+    await applyPullChanges(applied);
+  }
+
+  return {
+    total_sheet_rows: sheetByCode.size,
+    updated: applied.length,
+    unchanged,
+    not_in_db: notInDb,
+    applied_changes: applied,
+  };
+}
+
+export async function applyPullChanges(changesToApply: PullChange[]): Promise<{ applied: number }> {
+  if (changesToApply.length === 0) return { applied: 0 };
+  const db = getDb();
+  const statements = changesToApply.map(({ store_code, changes }) => {
       const fields = Object.keys(changes);
       const setClauses = fields.map((f) => `${f} = ?`);
       setClauses.push('sheet_synced_at = NOW()');
@@ -423,17 +551,10 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
       };
     });
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      await db.batch(statements.slice(i, i + chunkSize));
-    }
+  const chunkSize = 100;
+  for (let i = 0; i < statements.length; i += chunkSize) {
+    await db.batch(statements.slice(i, i + chunkSize));
   }
 
-  return {
-    total_sheet_rows: sheetByCode.size,
-    updated: applied.length,
-    unchanged,
-    not_in_db: notInDb,
-    applied_changes: applied,
-  };
+  return { applied: changesToApply.length };
 }
