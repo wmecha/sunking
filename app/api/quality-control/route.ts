@@ -61,7 +61,7 @@ export async function GET() {
         db.execute('SELECT id FROM gbp_snapshots ORDER BY imported_at DESC LIMIT 1'),
       ]);
 
-    // GBP status conflicts (Published in GBP but not Live in tracker)
+    // GBP status conflicts for rows already classified as in-account.
     let gbpConflicts: unknown[] = [];
     if (latestSnapshotResult.rows.length > 0) {
       const snapshotId = latestSnapshotResult.rows[0].id;
@@ -74,7 +74,8 @@ export async function GET() {
             ON UPPER(TRIM(t.store_code)) = UPPER(TRIM(g.store_code))
           WHERE g.snapshot_id = ?
             AND LOWER(g.status) = 'published'
-            AND t.tracker_status != 'Live'
+            AND t.tracker_status IN ('In account verified', 'In account not verified', 'Live', 'In Account')
+            AND t.tracker_status NOT IN ('In account verified', 'Live')
           ORDER BY t.country, t.business_name
         `,
         args: [snapshotId as number],

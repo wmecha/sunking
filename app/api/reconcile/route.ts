@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
+import { normalizeTrackerStatus } from '@/lib/status';
 
 export async function GET() {
   await initializeSchema();
@@ -73,33 +74,33 @@ export async function POST() {
         const trackerLoc = trackerCodes.get(code)!;
         const gbpStatusLower = gbpLoc.status?.toLowerCase().trim() ?? '';
         const gbpIsLive = gbpStatusLower === 'published';
-        const trackerIsLive = trackerLoc.tracker_status === 'Live';
+        const trackerStatus = normalizeTrackerStatus(trackerLoc.tracker_status) || trackerLoc.tracker_status;
+        const trackerIsVerified = trackerStatus === 'In account verified';
+        const trackerIsAccountStatus =
+          trackerStatus === 'In account verified' || trackerStatus === 'In account not verified';
+        const suggestedFromGbp = gbpIsLive ? 'In account verified' : 'In account not verified';
 
-        // Direction 1 — GBP says published, tracker doesn't yet
-        if (gbpIsLive && !trackerIsLive) {
+        // GBP export only tells us account publication state. Claim workflow
+        // categories still come from the Master Tracker, not from this CSV.
+        if (trackerIsAccountStatus && gbpIsLive && !trackerIsVerified) {
           statusMismatches.push({
             store_code: code,
             business_name: gbpLoc.business_name || trackerLoc.business_name,
             gbp_status: gbpLoc.status,
             tracker_status: trackerLoc.tracker_status,
             direction: 'gbp_ahead',
-            suggested_tracker_status: 'Live',
+            suggested_tracker_status: suggestedFromGbp,
           });
         }
 
-        // Direction 2 — tracker says Live but GBP says otherwise (dangerous: we're overstating)
-        if (trackerIsLive && !gbpIsLive && gbpStatusLower !== '') {
-          const suggested =
-            gbpStatusLower === 'duplicate' ? 'Duplicate'
-            : gbpStatusLower === 'not published' ? 'In Account'
-            : 'In Account';
+        if (trackerIsAccountStatus && trackerIsVerified && !gbpIsLive && gbpStatusLower !== '') {
           statusMismatches.push({
             store_code: code,
             business_name: gbpLoc.business_name || trackerLoc.business_name,
             gbp_status: gbpLoc.status,
             tracker_status: trackerLoc.tracker_status,
             direction: 'tracker_ahead',
-            suggested_tracker_status: suggested,
+            suggested_tracker_status: suggestedFromGbp,
           });
         }
 
@@ -122,7 +123,7 @@ export async function POST() {
         }
 
         if (gbpIsLive) ovConfirmed++;
-        if (!gbpIsLive && trackerLoc.tracker_status === 'In Account') ouConfirmed++;
+        if (!gbpIsLive && trackerStatus === 'In account not verified') ouConfirmed++;
       } else {
         missingFromTracker.push(gbpLoc);
       }

@@ -5,6 +5,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Download, Filter } from 'lucide-react';
+import { TRACKER_STATUSES } from '@/lib/status';
 
 interface ExportHistoryRow {
   id: number;
@@ -20,7 +21,6 @@ const COUNTRIES = [
   'South Africa', 'Tanzania', 'Togo', 'Uganda', 'Zambia',
 ];
 
-const STATUSES = ['Live', 'In Account', 'Submitted', 'Needs Pin', 'No Claim', 'Duplicate', 'Closed'];
 const LOCATION_TYPES = ['Shop', 'Store', 'Experience Centre', 'Warehouse', 'Head Office', 'LPG Depot'];
 
 function formatDate(dateString: string) {
@@ -158,7 +158,7 @@ export default function ExportPage() {
                   className="select-field"
                 >
                   <option value="">All statuses</option>
-                  {STATUSES.map((s) => (
+                  {TRACKER_STATUSES.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>

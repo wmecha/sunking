@@ -1,10 +1,10 @@
 interface CountryRow {
   country: string;
   total: number;
-  live: number;
-  not_live: number;
-  submitted: number;
-  needs_pin: number;
+  in_account_verified: number;
+  in_account_not_verified: number;
+  submitted_claim_awaiting_response: number;
+  no_claim_option: number;
 }
 
 export function CountryChart({ data }: { data: CountryRow[] }) {
@@ -17,26 +17,32 @@ export function CountryChart({ data }: { data: CountryRow[] }) {
       <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />
-          Live
+          Verified
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block" />
-          In Account
+          Not verified
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />
-          Other
+          Submitted
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block" />
+          No claim
         </span>
       </div>
 
       {top.map((row) => {
         const total = Number(row.total);
-        const live = Number(row.live);
-        const inAccount = Number(row.not_live);
-        const other = total - live - inAccount;
-        const livePct = (live / max) * 100;
-        const inAccPct = (inAccount / max) * 100;
-        const otherPct = Math.max((other / max) * 100, 0);
+        const verified = Number(row.in_account_verified);
+        const notVerified = Number(row.in_account_not_verified);
+        const submitted = Number(row.submitted_claim_awaiting_response);
+        const noClaim = Number(row.no_claim_option);
+        const verifiedPct = (verified / max) * 100;
+        const notVerifiedPct = (notVerified / max) * 100;
+        const submittedPct = (submitted / max) * 100;
+        const noClaimPct = (noClaim / max) * 100;
 
         return (
           <div key={String(row.country)} className="flex items-center gap-3 group">
@@ -44,25 +50,32 @@ export function CountryChart({ data }: { data: CountryRow[] }) {
               {String(row.country)}
             </div>
             <div className="flex-1 flex items-center h-5 gap-px">
-              {live > 0 && (
+              {verified > 0 && (
                 <div
                   className="h-full bg-green-500 rounded-l-sm transition-all duration-300 group-hover:opacity-90"
-                  style={{ width: `${livePct}%` }}
-                  title={`Live: ${live}`}
+                  style={{ width: `${verifiedPct}%` }}
+                  title={`In account verified: ${verified}`}
                 />
               )}
-              {inAccount > 0 && (
+              {notVerified > 0 && (
                 <div
                   className="h-full bg-blue-400 transition-all duration-300 group-hover:opacity-90"
-                  style={{ width: `${inAccPct}%` }}
-                  title={`In Account: ${inAccount}`}
+                  style={{ width: `${notVerifiedPct}%` }}
+                  title={`In account not verified: ${notVerified}`}
                 />
               )}
-              {other > 0 && (
+              {submitted > 0 && (
                 <div
-                  className="h-full bg-amber-400 rounded-r-sm transition-all duration-300 group-hover:opacity-90"
-                  style={{ width: `${otherPct}%` }}
-                  title={`Other: ${other}`}
+                  className="h-full bg-amber-400 transition-all duration-300 group-hover:opacity-90"
+                  style={{ width: `${submittedPct}%` }}
+                  title={`Submitted claim awaiting response: ${submitted}`}
+                />
+              )}
+              {noClaim > 0 && (
+                <div
+                  className="h-full bg-red-400 rounded-r-sm transition-all duration-300 group-hover:opacity-90"
+                  style={{ width: `${noClaimPct}%` }}
+                  title={`No claim Option: ${noClaim}`}
                 />
               )}
             </div>

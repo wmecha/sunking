@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { logAction } from '@/lib/audit';
+import { TRACKER_STATUSES } from '@/lib/status';
 
 /**
  * Apply reconciliation suggestions to the tracker.
@@ -10,8 +11,8 @@ import { logAction } from '@/lib/audit';
  * Body shape:
  * {
  *   "updates": [
- *     { "store_code": "SKKE001", "tracker_status": "Live" },
- *     { "store_code": "SKKE002", "tracker_status": "In Account" },
+ *     { "store_code": "SKKE001", "tracker_status": "In account verified" },
+ *     { "store_code": "SKKE002", "tracker_status": "In account not verified" },
  *     ...
  *   ]
  * }
@@ -23,15 +24,7 @@ import { logAction } from '@/lib/audit';
  * so we surface those in the diff list but don't auto-apply.
  */
 
-const ALLOWED_STATUSES = new Set([
-  'Live',
-  'In Account',
-  'Submitted',
-  'Needs Pin',
-  'No Claim',
-  'Duplicate',
-  'Closed',
-]);
+const ALLOWED_STATUSES = new Set<string>(TRACKER_STATUSES);
 
 export async function POST(request: NextRequest) {
   const db = getDb();

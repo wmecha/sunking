@@ -39,12 +39,12 @@ const TAB_DOCS: Record<TabKey, { title: string; what: string; why: string; fix: 
     title: 'OV / OU Conflicts',
     what: 'Two sub-checks: (1) rows where both OV and OU are TRUE — logically impossible since OV means "owned & verified on GBP" and OU means "owned but unverified"; (2) rows with no tracker_status set at all.',
     why: 'OV and OU are mutually exclusive. Having both true usually means a stale flag wasn\'t cleared when verification completed. Empty tracker_status leaves a row in limbo — it won\'t show up in any of the dashboard buckets.',
-    fix: 'For OV/OU conflicts: unset OU if verification succeeded, or unset OV if it actually failed. For missing status: pick the right value from the Tracker dropdown (Live / In Account / Submitted / Needs Pin / No Claim / Duplicate).',
+    fix: 'For OV/OU conflicts: unset OU if verification succeeded, or unset OV if it actually failed. For missing status: pick one of the four tracker categories.',
   },
   gbp_conflicts: {
     title: 'GBP vs Tracker Status Conflicts',
-    what: 'Rows where the latest imported GBP CSV says the location is "Published" but the tracker says it\'s anything other than "Live".',
-    why: 'This is the most common drift — Google approves a listing but the tracker isn\'t updated to "Live". The dashboard "Live on Google Maps" count under-reports reality until you fix this.',
+    what: 'Rows already classified as in-account where the latest imported GBP CSV says "Published" but the tracker is not "In account verified".',
+    why: 'This is the most common drift — Google approves a listing but the tracker still shows it as unverified. Submitted and no-claim rows stay governed by the Master Tracker claim-state column.',
     fix: 'Use the Reconciliation page → Status Mismatches tab. Each row has an "Apply" button that sets tracker_status to the suggested value. Or click "Apply all suggested" to fix the whole batch at once.',
   },
 };

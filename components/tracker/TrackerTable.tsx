@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -8,6 +9,7 @@ import { Search, ChevronLeft, ChevronRight, Download, Pencil, CheckCircle, MapPi
 import type { TrackerLocation } from '@/lib/types';
 import { PhotoUploader } from '@/components/tracker/PhotoUploader';
 import { googleMapsUrl, hasCoords, mapsUrlSource } from '@/lib/maps-url';
+import { TRACKER_STATUSES } from '@/lib/status';
 
 interface TrackerResponse {
   data: TrackerLocation[];
@@ -18,18 +20,19 @@ interface TrackerResponse {
   statuses: string[];
 }
 
-const TRACKER_STATUSES = ['Live', 'In Account', 'Submitted', 'Needs Pin', 'No Claim', 'Duplicate', 'Closed'];
 const LOCATION_TYPES = ['Shop', 'Store', 'Experience Centre', 'Warehouse', 'Head Office', 'LPG Depot'];
 
 const SAVED_VIEWS = [
   { label: 'All', status: '', country: '' },
-  { label: 'Live', status: 'Live', country: '' },
-  { label: 'In Account', status: 'In Account', country: '' },
-  { label: 'Needs Pin', status: 'Needs Pin', country: '' },
-  { label: 'No Claim', status: 'No Claim', country: '' },
+  { label: 'Verified', status: 'In account verified', country: '' },
+  { label: 'Not verified', status: 'In account not verified', country: '' },
+  { label: 'Submitted claims', status: 'Submitted Claim Awaiting Response', country: '' },
+  { label: 'No claim option', status: 'No claim Option', country: '' },
 ];
 
 export function TrackerTable() {
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get('status') || '';
   const [data, setData] = useState<TrackerLocation[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -40,10 +43,12 @@ export function TrackerTable() {
 
   // Filters
   const [country, setCountry] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(initialStatus);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [activeView, setActiveView] = useState('All');
+  const [activeView, setActiveView] = useState(
+    SAVED_VIEWS.find((view) => view.status === initialStatus)?.label ?? (initialStatus ? '' : 'All'),
+  );
 
   // Edit modal
   const [editingRow, setEditingRow] = useState<TrackerLocation | null>(null);
@@ -76,6 +81,13 @@ export function TrackerTable() {
   }, [page, pageSize, country, status, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    const nextStatus = searchParams.get('status') || '';
+    setStatus(nextStatus);
+    setActiveView(SAVED_VIEWS.find((view) => view.status === nextStatus)?.label ?? (nextStatus ? '' : 'All'));
+    setPage(1);
+  }, [searchParams]);
 
   function applyView(view: typeof SAVED_VIEWS[0]) {
     setActiveView(view.label);
@@ -178,7 +190,7 @@ export function TrackerTable() {
           className="select-field w-44"
         >
           <option value="">All Statuses</option>
-          {statuses.map((s) => (
+          {Array.from(new Set([...TRACKER_STATUSES, ...statuses])).map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>

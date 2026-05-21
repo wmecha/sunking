@@ -17,6 +17,7 @@ import { getComposio, getComposioConnectedAccountId } from './composio';
 import getDb from './db';
 import { getGoogleSheetsClient } from './google-sheets';
 import { getSheetSyncProvider } from './sheet-sync-config';
+import { deriveTrackerStatusFromSheet } from './status';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
 const SHEET_TAB = process.env.GOOGLE_SHEET_TAB || 'Master Tracker';
@@ -35,7 +36,6 @@ const COLUMNS = [
   'city',
   'latitude',
   'longitude',
-  'tracker_status',
   'google_maps_url',
 ] as const;
 type Column = (typeof COLUMNS)[number];
@@ -60,7 +60,6 @@ const COLUMN_HEADERS: Record<Column, string[]> = {
   city: ['Locality', 'City'],
   latitude: ['Latitude', 'Lat'],
   longitude: ['Longitude', 'Lng', 'Long'],
-  tracker_status: ['Tracker Status'],
   google_maps_url: ['Google Maps Link', 'Google Maps URL', 'Maps URL', 'Maps Link', 'GMaps URL', 'Map Link'],
 };
 
@@ -478,7 +477,7 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
 
   const placeholders = codes.map(() => '?').join(',');
   const dbResp = await db.execute({
-    sql: `SELECT ${COLUMNS.join(', ')} FROM tracker_locations WHERE store_code IN (${placeholders})`,
+    sql: `SELECT ${COLUMNS.join(', ')}, tracker_status FROM tracker_locations WHERE store_code IN (${placeholders})`,
     args: codes,
   });
   const dbByCode = new Map<string, Record<string, unknown>>();
@@ -502,9 +501,6 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
     const changes: Record<string, [unknown, unknown]> = {};
     for (const c of COLUMNS) {
       if (c === 'store_code') continue;
-      // Tracker status is owned by the app. The sheet uses values like DONE
-      // as an operations marker, and those must not replace Live in the DB.
-      if (c === 'tracker_status') continue;
       // Sheet may have empty cells we don't want to use to wipe DB values.
       // Treat empty-string sheet values as "no opinion" — skip them.
       const sheetVal = normalizeSheetValue(c, (sheetRow[c] ?? '').toString());
@@ -513,6 +509,11 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
       if (sheetVal !== dbVal) {
         changes[c] = [dbVal, sheetVal];
       }
+    }
+    const derivedStatus = deriveTrackerStatusFromSheet(sheetRow);
+    const dbStatus = (dbRow.tracker_status ?? '').toString().trim();
+    if (derivedStatus !== dbStatus) {
+      changes.tracker_status = [dbStatus, derivedStatus];
     }
     if (Object.keys(changes).length === 0) {
       unchanged++;

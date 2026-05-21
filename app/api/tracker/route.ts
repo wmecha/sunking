@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
+import { TRACKER_STATUSES, TRACKER_STATUS_ALIASES, normalizeTrackerStatus } from '@/lib/status';
 
 export async function GET(request: NextRequest) {
   await initializeSchema();
@@ -22,7 +23,12 @@ export async function GET(request: NextRequest) {
     const params: (string | number)[] = [];
 
     if (country) { whereParts.push('country = ?'); params.push(country); }
-    if (status) { whereParts.push('tracker_status = ?'); params.push(status); }
+    if (status) {
+      const canonicalStatus = normalizeTrackerStatus(status);
+      const aliases = canonicalStatus ? TRACKER_STATUS_ALIASES[canonicalStatus] : [status];
+      whereParts.push(`tracker_status IN (${aliases.map(() => '?').join(',')})`);
+      params.push(...aliases);
+    }
     if (search) {
       whereParts.push('(store_code ILIKE ? OR business_name ILIKE ? OR city ILIKE ? OR country ILIKE ? OR address ILIKE ?)');
       const term = `%${search}%`;
@@ -40,7 +46,11 @@ export async function GET(request: NextRequest) {
     });
 
     const countriesResult = await db.execute('SELECT DISTINCT country FROM tracker_locations WHERE country IS NOT NULL AND country != \'\' ORDER BY country');
-    const statusesResult = await db.execute('SELECT DISTINCT tracker_status FROM tracker_locations WHERE tracker_status IS NOT NULL ORDER BY tracker_status');
+    const statusesResult = await db.execute('SELECT DISTINCT tracker_status FROM tracker_locations WHERE tracker_status IS NOT NULL AND tracker_status != \'\' ORDER BY tracker_status');
+    const statuses = Array.from(new Set([
+      ...TRACKER_STATUSES,
+      ...statusesResult.rows.map((r) => String(r.tracker_status ?? '')).filter(Boolean),
+    ]));
 
     return NextResponse.json({
       data: dataResult.rows,
@@ -48,7 +58,7 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       countries: countriesResult.rows.map((r) => r.country),
-      statuses: statusesResult.rows.map((r) => r.tracker_status),
+      statuses,
     });
   } catch (error) {
     console.error('[tracker] GET error:', error);

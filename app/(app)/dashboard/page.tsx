@@ -7,6 +7,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { CountryChart } from '@/components/dashboard/CountryChart';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
+import { TRACKER_STATUS_ALIASES, type TrackerStatus } from '@/lib/status';
 import {
   MapPin,
   CheckCircle,
@@ -17,15 +18,16 @@ import {
   Clock,
   ShieldCheck,
   ExternalLink,
+  XCircle,
 } from 'lucide-react';
 
 interface CountryBreakdown {
   country: string;
   total: number;
-  live: number;
-  not_live: number;
-  submitted: number;
-  needs_pin: number;
+  in_account_verified: number;
+  in_account_not_verified: number;
+  submitted_claim_awaiting_response: number;
+  no_claim_option: number;
 }
 
 function formatDate(dateString: string) {
@@ -36,24 +38,38 @@ function formatDate(dateString: string) {
   });
 }
 
+function statusSql(status: TrackerStatus): string {
+  return TRACKER_STATUS_ALIASES[status].map((s) => `'${s.replace(/'/g, "''")}'`).join(',');
+}
+
 async function getDashboardData() {
   await initializeSchema();
   const db = getDb();
 
-  const [totalResult, liveResult, inAccountResult, needsResult, countryResult, snapshotResult, reconResult] =
+  const [
+    totalResult,
+    verifiedResult,
+    notVerifiedResult,
+    submittedResult,
+    noClaimResult,
+    countryResult,
+    snapshotResult,
+    reconResult,
+  ] =
     await Promise.all([
       db.execute("SELECT COUNT(*) as count FROM tracker_locations"),
-      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status = 'Live'"),
-      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status = 'In Account'"),
-      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN ('Needs Pin', 'No Claim', 'Submitted', 'Duplicate')"),
+      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('In account verified')})`),
+      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('In account not verified')})`),
+      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('Submitted Claim Awaiting Response')})`),
+      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('No claim Option')})`),
       db.execute(`
         SELECT
           country,
           COUNT(*) as total,
-          SUM(CASE WHEN tracker_status = 'Live' THEN 1 ELSE 0 END) as live,
-          SUM(CASE WHEN tracker_status = 'In Account' THEN 1 ELSE 0 END) as not_live,
-          SUM(CASE WHEN tracker_status = 'Submitted' THEN 1 ELSE 0 END) as submitted,
-          SUM(CASE WHEN tracker_status = 'Needs Pin' THEN 1 ELSE 0 END) as needs_pin
+          SUM(CASE WHEN tracker_status IN (${statusSql('In account verified')}) THEN 1 ELSE 0 END) as in_account_verified,
+          SUM(CASE WHEN tracker_status IN (${statusSql('In account not verified')}) THEN 1 ELSE 0 END) as in_account_not_verified,
+          SUM(CASE WHEN tracker_status IN (${statusSql('Submitted Claim Awaiting Response')}) THEN 1 ELSE 0 END) as submitted_claim_awaiting_response,
+          SUM(CASE WHEN tracker_status IN (${statusSql('No claim Option')}) THEN 1 ELSE 0 END) as no_claim_option
         FROM tracker_locations
         WHERE country IS NOT NULL AND country != ''
         GROUP BY country
@@ -64,17 +80,18 @@ async function getDashboardData() {
     ]);
 
   return {
-    totalInAccount: Number(totalResult.rows[0]?.count ?? 0),
-    liveOnMaps: Number(liveResult.rows[0]?.count ?? 0),
-    inAccountNotLive: Number(inAccountResult.rows[0]?.count ?? 0),
-    needsAttention: Number(needsResult.rows[0]?.count ?? 0),
+    totalLocations: Number(totalResult.rows[0]?.count ?? 0),
+    inAccountVerified: Number(verifiedResult.rows[0]?.count ?? 0),
+    inAccountNotVerified: Number(notVerifiedResult.rows[0]?.count ?? 0),
+    submittedClaimAwaitingResponse: Number(submittedResult.rows[0]?.count ?? 0),
+    noClaimOption: Number(noClaimResult.rows[0]?.count ?? 0),
     countryBreakdown: countryResult.rows.map((r) => ({
       country: String(r.country ?? ''),
       total: Number(r.total ?? 0),
-      live: Number(r.live ?? 0),
-      not_live: Number(r.not_live ?? 0),
-      submitted: Number(r.submitted ?? 0),
-      needs_pin: Number(r.needs_pin ?? 0),
+      in_account_verified: Number(r.in_account_verified ?? 0),
+      in_account_not_verified: Number(r.in_account_not_verified ?? 0),
+      submitted_claim_awaiting_response: Number(r.submitted_claim_awaiting_response ?? 0),
+      no_claim_option: Number(r.no_claim_option ?? 0),
     })) as CountryBreakdown[],
     latestSnapshot: snapshotResult.rows[0] as Record<string, unknown> | undefined,
     lastReconciliation: reconResult.rows[0] as Record<string, unknown> | undefined,
@@ -93,35 +110,52 @@ export default async function DashboardPage() {
 
       <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-          <MetricCard
-            label="Total in Account"
-            value={data.totalInAccount}
-            subtext="Across all countries"
-            icon={<MapPin size={24} />}
-            accentColor="#F5C000"
-          />
-          <MetricCard
-            label="Live on Google Maps"
-            value={data.liveOnMaps}
-            subtext="Published & verified"
-            icon={<CheckCircle size={24} />}
-            accentColor="#16A34A"
-          />
-          <MetricCard
-            label="In Account, Not Live"
-            value={data.inAccountNotLive}
-            subtext="Claimed but not published"
-            icon={<Clock size={24} />}
-            accentColor="#D97706"
-          />
-          <MetricCard
-            label="Needs Attention"
-            value={data.needsAttention}
-            subtext="Pending, no claim, or issues"
-            icon={<AlertTriangle size={24} />}
-            accentColor="#DC2626"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+          <Link href="/tracker" className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="Total locations"
+              value={data.totalLocations}
+              subtext="Master tracker rows"
+              icon={<MapPin size={24} />}
+              accentColor="#F5C000"
+            />
+          </Link>
+          <Link href={`/tracker?status=${encodeURIComponent('In account verified')}`} className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="In account verified"
+              value={data.inAccountVerified}
+              subtext="Owned and verified"
+              icon={<CheckCircle size={24} />}
+              accentColor="#16A34A"
+            />
+          </Link>
+          <Link href={`/tracker?status=${encodeURIComponent('In account not verified')}`} className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="In account not verified"
+              value={data.inAccountNotVerified}
+              subtext="In GBP account, not verified"
+              icon={<Clock size={24} />}
+              accentColor="#2563EB"
+            />
+          </Link>
+          <Link href={`/tracker?status=${encodeURIComponent('Submitted Claim Awaiting Response')}`} className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="Submitted claims"
+              value={data.submittedClaimAwaitingResponse}
+              subtext="Awaiting response"
+              icon={<AlertTriangle size={24} />}
+              accentColor="#D97706"
+            />
+          </Link>
+          <Link href={`/tracker?status=${encodeURIComponent('No claim Option')}`} className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="No claim option"
+              value={data.noClaimOption}
+              subtext="No claim path available"
+              icon={<XCircle size={24} />}
+              accentColor="#DC2626"
+            />
+          </Link>
         </div>
 
         {/* Country Chart */}
@@ -151,10 +185,10 @@ export default async function DashboardPage() {
                       <tr className="bg-gray-50 border-b border-[#E5E7EB]">
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Country</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Live</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">In Account</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Verified</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Not Verified</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Submitted</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Needs Pin</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">No Claim</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -163,16 +197,16 @@ export default async function DashboardPage() {
                           <td className="px-4 py-3 font-medium text-[#1C2B3A]">{String(row.country)}</td>
                           <td className="px-4 py-3 text-right font-semibold tabular-nums">{Number(row.total)}</td>
                           <td className="px-4 py-3 text-right">
-                            <span className="text-green-700 font-medium tabular-nums">{Number(row.live)}</span>
+                            <span className="text-green-700 font-medium tabular-nums">{Number(row.in_account_verified)}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <span className="text-blue-700 font-medium tabular-nums">{Number(row.not_live)}</span>
+                            <span className="text-blue-700 font-medium tabular-nums">{Number(row.in_account_not_verified)}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <span className="text-amber-700 font-medium tabular-nums">{Number(row.submitted)}</span>
+                            <span className="text-amber-700 font-medium tabular-nums">{Number(row.submitted_claim_awaiting_response)}</span>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <span className="text-orange-700 font-medium tabular-nums">{Number(row.needs_pin)}</span>
+                            <span className="text-red-700 font-medium tabular-nums">{Number(row.no_claim_option)}</span>
                           </td>
                         </tr>
                       ))}

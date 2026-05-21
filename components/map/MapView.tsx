@@ -31,13 +31,10 @@ interface MapViewProps {
 
 // Colour per status (matches StatusBadge palette in tracker)
 const STATUS_COLOURS: Record<string, string> = {
-  Live: '#16A34A',
-  'In Account': '#2563EB',
-  Submitted: '#D97706',
-  'Needs Pin': '#EA580C',
-  'No Claim': '#DC2626',
-  Duplicate: '#7C3AED',
-  Closed: '#6B7280',
+  'In account verified': '#16A34A',
+  'In account not verified': '#2563EB',
+  'Submitted Claim Awaiting Response': '#D97706',
+  'No claim Option': '#DC2626',
 };
 
 function colourFor(status: string): string {

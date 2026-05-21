@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { TopBar } from '@/components/layout/TopBar';
 import { TrackerTable } from '@/components/tracker/TrackerTable';
@@ -32,7 +33,9 @@ export default function TrackerPage() {
         }
       />
       <div className="p-3 sm:p-6">
-        <TrackerTable />
+        <Suspense fallback={<div className="text-sm text-gray-400">Loading tracker...</div>}>
+          <TrackerTable />
+        </Suspense>
       </div>
     </div>
   );

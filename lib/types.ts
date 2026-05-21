@@ -1,3 +1,5 @@
+import type { TrackerStatus } from './status';
+
 // Core TypeScript interfaces for Sun King Location Intelligence
 
 export interface GbpSnapshot {
@@ -86,17 +88,18 @@ export interface ExportHistory {
 export interface CountryBreakdown {
   country: string;
   total: number;
-  live: number;
-  not_live: number;
-  submitted: number;
-  needs_pin: number;
+  in_account_verified: number;
+  in_account_not_verified: number;
+  submitted_claim_awaiting_response: number;
+  no_claim_option: number;
 }
 
 export interface DashboardMetrics {
-  totalInAccount: number;
-  liveOnMaps: number;
-  inAccountNotLive: number;
-  needsAttention: number;
+  totalLocations: number;
+  inAccountVerified: number;
+  inAccountNotVerified: number;
+  submittedClaimAwaitingResponse: number;
+  noClaimOption: number;
   latestSnapshot?: GbpSnapshot;
   countryBreakdown: CountryBreakdown[];
 }
@@ -113,11 +116,4 @@ export interface ReconciliationResult {
   }>;
 }
 
-export type TrackerStatus =
-  | 'Live'
-  | 'In Account'
-  | 'Submitted'
-  | 'Needs Pin'
-  | 'No Claim'
-  | 'Duplicate'
-  | 'Closed';
+export type { TrackerStatus };

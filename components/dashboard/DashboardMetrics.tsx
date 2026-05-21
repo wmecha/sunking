@@ -1,47 +1,56 @@
 import { MetricCard } from '@/components/ui/MetricCard';
-import { MapPin, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { MapPin, CheckCircle, Clock, AlertTriangle, XCircle } from 'lucide-react';
 
 interface DashboardMetricsProps {
-  totalInAccount: number;
-  liveOnMaps: number;
-  inAccountNotLive: number;
-  needsAttention: number;
+  totalLocations: number;
+  inAccountVerified: number;
+  inAccountNotVerified: number;
+  submittedClaimAwaitingResponse: number;
+  noClaimOption: number;
 }
 
 export function DashboardMetrics({
-  totalInAccount,
-  liveOnMaps,
-  inAccountNotLive,
-  needsAttention,
+  totalLocations,
+  inAccountVerified,
+  inAccountNotVerified,
+  submittedClaimAwaitingResponse,
+  noClaimOption,
 }: DashboardMetricsProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
       <MetricCard
-        label="Total in Account"
-        value={totalInAccount}
-        subtext="Across all countries"
+        label="Total locations"
+        value={totalLocations}
+        subtext="Master tracker rows"
         icon={<MapPin size={24} />}
         accentColor="#F5C000"
       />
       <MetricCard
-        label="Live on Google Maps"
-        value={liveOnMaps}
-        subtext="Published & verified"
+        label="In account verified"
+        value={inAccountVerified}
+        subtext="Owned and verified"
         icon={<CheckCircle size={24} />}
         accentColor="#16A34A"
       />
       <MetricCard
-        label="In Account, Not Live"
-        value={inAccountNotLive}
-        subtext="Claimed but not published"
+        label="In account not verified"
+        value={inAccountNotVerified}
+        subtext="In GBP account, not verified"
         icon={<Clock size={24} />}
+        accentColor="#2563EB"
+      />
+      <MetricCard
+        label="Submitted claims"
+        value={submittedClaimAwaitingResponse}
+        subtext="Awaiting response"
+        icon={<AlertTriangle size={24} />}
         accentColor="#D97706"
       />
       <MetricCard
-        label="Needs Attention"
-        value={needsAttention}
-        subtext="Pending, no claim, or issues"
-        icon={<AlertTriangle size={24} />}
+        label="No claim option"
+        value={noClaimOption}
+        subtext="No claim path available"
+        icon={<XCircle size={24} />}
         accentColor="#DC2626"
       />
     </div>

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { toIso2 } from '@/lib/countries';
+import { TRACKER_STATUS_ALIASES, normalizeTrackerStatus } from '@/lib/status';
 import Papa from 'papaparse';
 
 /**
@@ -12,7 +13,7 @@ import Papa from 'papaparse';
  *
  * Filters supported via query params:
  *   ?country=Kenya,Nigeria  (CSV)
- *   ?status=Live
+ *   ?status=In%20account%20verified
  *   ?location_type=Shop
  */
 
@@ -55,6 +56,14 @@ const GOOGLE_COLUMNS = [
 ] as const;
 
 type Row = Record<string, unknown>;
+
+function addStatusFilter(whereParts: string[], params: (string | number)[], status: string) {
+  if (!status) return;
+  const canonicalStatus = normalizeTrackerStatus(status);
+  const aliases = canonicalStatus ? TRACKER_STATUS_ALIASES[canonicalStatus] : [status];
+  whereParts.push(`tracker_status IN (${aliases.map(() => '?').join(',')})`);
+  params.push(...aliases);
+}
 
 function buildRow(r: Row): Record<string, string> {
   const otherPhotos = Array.isArray(r.other_photo_urls)
@@ -120,7 +129,7 @@ export async function GET(request: NextRequest) {
         params.push(...countries);
       }
     }
-    if (status) { whereParts.push('tracker_status = ?'); params.push(status); }
+    addStatusFilter(whereParts, params, status);
     if (locationType) { whereParts.push('location_type = ?'); params.push(locationType); }
 
     const where = 'WHERE ' + whereParts.join(' AND ');

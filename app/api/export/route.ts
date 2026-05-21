@@ -3,7 +3,16 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
+import { TRACKER_STATUS_ALIASES, normalizeTrackerStatus } from '@/lib/status';
 import Papa from 'papaparse';
+
+function addStatusFilter(whereParts: string[], params: (string | number)[], status: string) {
+  if (!status) return;
+  const canonicalStatus = normalizeTrackerStatus(status);
+  const aliases = canonicalStatus ? TRACKER_STATUS_ALIASES[canonicalStatus] : [status];
+  whereParts.push(`tracker_status IN (${aliases.map(() => '?').join(',')})`);
+  params.push(...aliases);
+}
 
 export async function GET(request: NextRequest) {
   await initializeSchema();
@@ -32,7 +41,7 @@ export async function GET(request: NextRequest) {
         params.push(...countries);
       }
     }
-    if (status) { whereParts.push('tracker_status = ?'); params.push(status); }
+    addStatusFilter(whereParts, params, status);
     if (locationType) { whereParts.push('location_type = ?'); params.push(locationType); }
 
     const where = 'WHERE ' + whereParts.join(' AND ');
@@ -95,7 +104,7 @@ export async function POST(request: NextRequest) {
       whereParts.push(`country IN (${countries.map(() => '?').join(',')})`);
       params.push(...countries);
     }
-    if (status) { whereParts.push('tracker_status = ?'); params.push(status); }
+    addStatusFilter(whereParts, params, status);
     if (location_type) { whereParts.push('location_type = ?'); params.push(location_type); }
 
     const where = 'WHERE ' + whereParts.join(' AND ');
