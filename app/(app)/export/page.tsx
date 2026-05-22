@@ -33,10 +33,20 @@ function formatDate(dateString: string) {
   });
 }
 
+function parseStoreCodes(value: string): string[] {
+  return Array.from(new Set(
+    value
+      .split(/[\s,;]+/)
+      .map((code) => code.trim())
+      .filter(Boolean)
+  ));
+}
+
 export default function ExportPage() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  const [status, setStatus] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [locationType, setLocationType] = useState('');
+  const [storeCodeInput, setStoreCodeInput] = useState('');
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [countLoading, setCountLoading] = useState(false);
   const [history, setHistory] = useState<ExportHistoryRow[]>([]);
@@ -70,8 +80,9 @@ export default function ExportPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             countries: selectedCountries,
-            status: status || undefined,
+            statuses: selectedStatuses,
             location_type: locationType || undefined,
+            store_codes: parseStoreCodes(storeCodeInput),
           }),
           signal: controller.signal,
         });
@@ -87,7 +98,7 @@ export default function ExportPage() {
 
     fetchCount();
     return () => controller.abort();
-  }, [selectedCountries, status, locationType]);
+  }, [selectedCountries, selectedStatuses, locationType, storeCodeInput]);
 
   function toggleCountry(c: string) {
     setSelectedCountries((prev) =>
@@ -95,11 +106,19 @@ export default function ExportPage() {
     );
   }
 
+  function toggleStatus(s: string) {
+    setSelectedStatuses((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  }
+
   function handleDownload(format: 'tracker' | 'google-bulk' = 'tracker') {
     const params = new URLSearchParams();
     if (selectedCountries.length > 0) params.set('country', selectedCountries.join(','));
-    if (status) params.set('status', status);
+    if (selectedStatuses.length > 0) params.set('status', selectedStatuses.join(','));
     if (locationType) params.set('location_type', locationType);
+    const storeCodes = parseStoreCodes(storeCodeInput);
+    if (storeCodes.length > 0) params.set('store_codes', storeCodes.join(','));
     const path = format === 'google-bulk' ? '/api/export/google-bulk' : '/api/export';
     window.location.href = `${path}?${params}`;
 
@@ -151,17 +170,28 @@ export default function ExportPage() {
 
               {/* Status */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-[#374151] mb-1">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="select-field"
-                >
-                  <option value="">All statuses</option>
+                <label className="block text-sm font-medium text-[#374151] mb-2">Statuses</label>
+                <div className="space-y-2">
                   {TRACKER_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <label key={s} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedStatuses.includes(s)}
+                        onChange={() => toggleStatus(s)}
+                        className="rounded border-[#E5E7EB] text-[#F5C000] focus:ring-[#F5C000]"
+                      />
+                      <span className="text-sm text-[#374151]">{s}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
+                {selectedStatuses.length > 0 && (
+                  <button
+                    onClick={() => setSelectedStatuses([])}
+                    className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline"
+                  >
+                    Clear statuses
+                  </button>
+                )}
               </div>
 
               {/* Location Type */}
@@ -177,6 +207,22 @@ export default function ExportPage() {
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Specific locations */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-[#374151] mb-1">Specific store codes</label>
+                <textarea
+                  value={storeCodeInput}
+                  onChange={(e) => setStoreCodeInput(e.target.value)}
+                  className="input-field min-h-[96px] font-mono text-xs"
+                  placeholder="Paste store codes separated by commas, spaces, or new lines"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  {parseStoreCodes(storeCodeInput).length > 0
+                    ? `${parseStoreCodes(storeCodeInput).length} specific location(s) selected`
+                    : 'Optional. Leave empty to export by filters only.'}
+                </p>
               </div>
             </Card>
           </div>
@@ -210,8 +256,13 @@ export default function ExportPage() {
                 ) : (
                   <span>All countries</span>
                 )}
-                {status && <span> · Status: <span className="text-[#1C2B3A]">{status}</span></span>}
+                {selectedStatuses.length > 0 && (
+                  <span> · Statuses: <span className="text-[#1C2B3A]">{selectedStatuses.join(', ')}</span></span>
+                )}
                 {locationType && <span> · Type: <span className="text-[#1C2B3A]">{locationType}</span></span>}
+                {parseStoreCodes(storeCodeInput).length > 0 && (
+                  <span> · Specific locations: <span className="text-[#1C2B3A]">{parseStoreCodes(storeCodeInput).length}</span></span>
+                )}
               </div>
 
               {/* Download Buttons */}

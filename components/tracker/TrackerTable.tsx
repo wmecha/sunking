@@ -23,16 +23,16 @@ interface TrackerResponse {
 const LOCATION_TYPES = ['Shop', 'Store', 'Experience Centre', 'Warehouse', 'Head Office', 'LPG Depot'];
 
 const SAVED_VIEWS = [
-  { label: 'All', status: '', country: '' },
-  { label: 'Verified', status: 'In account verified', country: '' },
-  { label: 'Not verified', status: 'In account not verified', country: '' },
-  { label: 'Submitted claims', status: 'Submitted Claim Awaiting Response', country: '' },
-  { label: 'No claim option', status: 'No claim Option', country: '' },
+  { label: 'All', statuses: [] as string[], country: '' },
+  { label: 'Verified', statuses: ['In account verified'], country: '' },
+  { label: 'Not verified', statuses: ['In account not verified'], country: '' },
+  { label: 'Submitted claims', statuses: ['Submitted Claim Awaiting Response'], country: '' },
+  { label: 'No claim option', statuses: ['No claim Option'], country: '' },
 ];
 
 export function TrackerTable() {
   const searchParams = useSearchParams();
-  const initialStatus = searchParams.get('status') || '';
+  const initialStatuses = (searchParams.get('status') || '').split(',').map((s) => s.trim()).filter(Boolean);
   const initialAccount = searchParams.get('account') || '';
   const initialGbpStatus = searchParams.get('gbpStatus') || '';
   const initialWorkflow = searchParams.get('workflow') || '';
@@ -46,15 +46,16 @@ export function TrackerTable() {
 
   // Filters
   const [country, setCountry] = useState('');
-  const [status, setStatus] = useState(initialStatus);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(initialStatuses);
   const [account, setAccount] = useState(initialAccount);
   const [gbpStatus, setGbpStatus] = useState(initialGbpStatus);
   const [workflow, setWorkflow] = useState(initialWorkflow);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [activeView, setActiveView] = useState(
-    SAVED_VIEWS.find((view) => view.status === initialStatus)?.label ?? (initialStatus ? '' : 'All'),
+    SAVED_VIEWS.find((view) => view.statuses.join(',') === initialStatuses.join(','))?.label ?? (initialStatuses.length ? '' : 'All'),
   );
+  const [selectedRowCodes, setSelectedRowCodes] = useState<Set<string>>(new Set());
 
   // Edit modal
   const [editingRow, setEditingRow] = useState<TrackerLocation | null>(null);
@@ -69,7 +70,7 @@ export function TrackerTable() {
         page: String(page),
         pageSize: String(pageSize),
         ...(country && { country }),
-        ...(status && { status }),
+        ...(selectedStatuses.length > 0 && { status: selectedStatuses.join(',') }),
         ...(account && { account }),
         ...(gbpStatus && { gbpStatus }),
         ...(workflow && { workflow }),
@@ -87,26 +88,26 @@ export function TrackerTable() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, country, status, account, gbpStatus, workflow, search]);
+  }, [page, pageSize, country, selectedStatuses, account, gbpStatus, workflow, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    const nextStatus = searchParams.get('status') || '';
+    const nextStatuses = (searchParams.get('status') || '').split(',').map((s) => s.trim()).filter(Boolean);
     const nextAccount = searchParams.get('account') || '';
     const nextGbpStatus = searchParams.get('gbpStatus') || '';
     const nextWorkflow = searchParams.get('workflow') || '';
-    setStatus(nextStatus);
+    setSelectedStatuses(nextStatuses);
     setAccount(nextAccount);
     setGbpStatus(nextGbpStatus);
     setWorkflow(nextWorkflow);
-    setActiveView(SAVED_VIEWS.find((view) => view.status === nextStatus)?.label ?? (nextStatus ? '' : 'All'));
+    setActiveView(SAVED_VIEWS.find((view) => view.statuses.join(',') === nextStatuses.join(','))?.label ?? (nextStatuses.length ? '' : 'All'));
     setPage(1);
   }, [searchParams]);
 
   function applyView(view: typeof SAVED_VIEWS[0]) {
     setActiveView(view.label);
-    setStatus(view.status);
+    setSelectedStatuses(view.statuses);
     setAccount('');
     setGbpStatus('');
     setWorkflow('');
@@ -120,27 +121,48 @@ export function TrackerTable() {
     setActiveView('');
   }
 
-  function handleFilterChange(field: 'country' | 'status', value: string) {
+  function handleFilterChange(field: 'country', value: string) {
     if (field === 'country') setCountry(value);
-    if (field === 'status') {
-      setStatus(value);
-      setAccount('');
-      setGbpStatus('');
-      setWorkflow('');
-    }
     setPage(1);
     setActiveView('');
   }
 
-  function handleExport() {
+  function toggleStatus(nextStatus: string) {
+    setSelectedStatuses((current) => (
+      current.includes(nextStatus)
+        ? current.filter((s) => s !== nextStatus)
+        : [...current, nextStatus]
+    ));
+    setAccount('');
+    setGbpStatus('');
+    setWorkflow('');
+    setPage(1);
+    setActiveView('');
+  }
+
+  function buildExportParams(format: 'filtered' | 'selected') {
     const params = new URLSearchParams({
       ...(country && { country }),
-      ...(status && { status }),
+      ...(selectedStatuses.length > 0 && { status: selectedStatuses.join(',') }),
       ...(account && { account }),
       ...(gbpStatus && { gbpStatus }),
       ...(workflow && { workflow }),
     });
-    window.location.href = `/api/export?${params}`;
+    if (format === 'selected' && selectedRowCodes.size > 0) {
+      params.set('store_codes', Array.from(selectedRowCodes).join(','));
+      params.delete('country');
+      params.delete('status');
+      params.delete('account');
+      params.delete('gbpStatus');
+      params.delete('workflow');
+    }
+    return params;
+  }
+
+  function handleExport(format: 'filtered' | 'selected' = 'filtered', kind: 'tracker' | 'google-bulk' = 'tracker') {
+    const params = buildExportParams(format);
+    const path = kind === 'google-bulk' ? '/api/export/google-bulk' : '/api/export';
+    window.location.href = `${path}?${params}`;
   }
 
   function openEdit(row: TrackerLocation, e: React.MouseEvent) {
@@ -176,6 +198,9 @@ export function TrackerTable() {
   const totalPages = Math.ceil(total / pageSize);
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
+  const selectedOnPage = data.filter((row) => row.store_code && selectedRowCodes.has(row.store_code)).length;
+  const selectableOnPage = data.filter((row) => row.store_code).length;
+  const allPageSelected = selectableOnPage > 0 && selectedOnPage === selectableOnPage;
 
   return (
     <div className="flex flex-col gap-4">
@@ -210,16 +235,35 @@ export function TrackerTable() {
           ))}
         </select>
 
-        <select
-          value={status}
-          onChange={(e) => handleFilterChange('status', e.target.value)}
-          className="select-field w-44"
-        >
-          <option value="">All Statuses</option>
+        <div className="flex flex-wrap items-center gap-2 max-w-xl">
           {Array.from(new Set([...TRACKER_STATUSES, ...statuses])).map((s) => (
-            <option key={s} value={s}>{s}</option>
+            <label key={s} className="flex items-center gap-1.5 rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs text-[#374151]">
+              <input
+                type="checkbox"
+                checked={selectedStatuses.includes(s)}
+                onChange={() => toggleStatus(s)}
+                className="rounded border-[#E5E7EB] text-[#F5C000] focus:ring-[#F5C000]"
+              />
+              {s}
+            </label>
           ))}
-        </select>
+          {selectedStatuses.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedStatuses([]);
+                setAccount('');
+                setGbpStatus('');
+                setWorkflow('');
+                setPage(1);
+                setActiveView('All');
+              }}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              Clear statuses
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center gap-2 flex-1 min-w-[200px]">
           <input
@@ -236,12 +280,33 @@ export function TrackerTable() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" size="md" onClick={handleExport}>
+          <Button variant="secondary" size="md" onClick={() => handleExport('filtered', 'tracker')}>
             <Download size={16} />
             Export filtered
           </Button>
+          <Button variant="secondary" size="md" onClick={() => handleExport('filtered', 'google-bulk')}>
+            <Download size={16} />
+            Bulk CSV
+          </Button>
         </div>
       </div>
+
+      {selectedRowCodes.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F5C000] bg-yellow-50 px-4 py-3 text-sm">
+          <span className="font-medium text-[#1C2B3A]">{selectedRowCodes.size} location(s) selected</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => handleExport('selected', 'tracker')}>
+              <Download size={14} /> Export selected tracker CSV
+            </Button>
+            <Button size="sm" onClick={() => handleExport('selected', 'google-bulk')}>
+              <Download size={14} /> Export selected bulk upload CSV
+            </Button>
+            <button className="text-xs text-gray-500 underline hover:text-gray-700" onClick={() => setSelectedRowCodes(new Set())}>
+              Clear selection
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Row count + pagination */}
       <div className="flex items-center justify-between text-sm text-gray-500">
@@ -271,6 +336,24 @@ export function TrackerTable() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-[#E5E7EB]">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-10">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={(event) => {
+                      setSelectedRowCodes((current) => {
+                        const next = new Set(current);
+                        for (const row of data) {
+                          if (!row.store_code) continue;
+                          if (event.target.checked) next.add(row.store_code);
+                          else next.delete(row.store_code);
+                        }
+                        return next;
+                      });
+                    }}
+                    className="rounded border-[#E5E7EB] text-[#F5C000] focus:ring-[#F5C000]"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Store Code</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Business Name</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Country</th>
@@ -285,7 +368,7 @@ export function TrackerTable() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                     <div className="flex items-center justify-center gap-2">
                       <svg className="animate-spin h-4 w-4 text-[#F5C000]" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -297,11 +380,28 @@ export function TrackerTable() {
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">No locations match your filters.</td>
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">No locations match your filters.</td>
                 </tr>
               ) : (
                 data.map((row) => (
                   <tr key={row.id} className="border-b border-[#E5E7EB] hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      {row.store_code ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedRowCodes.has(row.store_code)}
+                          onChange={(event) => {
+                            setSelectedRowCodes((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) next.add(row.store_code!);
+                              else next.delete(row.store_code!);
+                              return next;
+                            });
+                          }}
+                          className="rounded border-[#E5E7EB] text-[#F5C000] focus:ring-[#F5C000]"
+                        />
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-[#374151] whitespace-nowrap">{row.store_code || '—'}</td>
                     <td className="px-4 py-3 max-w-[220px]">
                       {row.business_name ? (

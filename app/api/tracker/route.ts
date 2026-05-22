@@ -27,8 +27,14 @@ export async function GET(request: NextRequest) {
 
     if (country) { whereParts.push('t.country = ?'); params.push(country); }
     if (status) {
-      const canonicalStatus = normalizeTrackerStatus(status);
-      const aliases = canonicalStatus ? TRACKER_STATUS_ALIASES[canonicalStatus] : [status];
+      const aliases = status
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .flatMap((s) => {
+          const canonicalStatus = normalizeTrackerStatus(s);
+          return canonicalStatus ? TRACKER_STATUS_ALIASES[canonicalStatus] : [s];
+        });
       whereParts.push(`t.tracker_status IN (${aliases.map(() => '?').join(',')})`);
       params.push(...aliases);
     }
