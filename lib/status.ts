@@ -32,8 +32,17 @@ function isTruthy(value: unknown): boolean {
 export function deriveTrackerStatusFromSheet(row: {
   claiming_issue?: unknown;
   ov?: unknown;
+  ou?: unknown;
 }): TrackerStatus {
   const issue = String(row.claiming_issue ?? '').toLowerCase();
+
+  if (isTruthy(row.ov)) {
+    return 'In account verified';
+  }
+
+  if (isTruthy(row.ou)) {
+    return 'In account not verified';
+  }
 
   if (issue.includes('awaiting response')) {
     return 'Submitted Claim Awaiting Response';
@@ -44,6 +53,24 @@ export function deriveTrackerStatusFromSheet(row: {
   }
 
   return isTruthy(row.ov) ? 'In account verified' : 'In account not verified';
+}
+
+export function accountStatusFromGbpStatus(status: unknown): {
+  tracker_status: TrackerStatus;
+  ov: 'TRUE' | 'FALSE';
+  ou: 'TRUE' | 'FALSE';
+} | null {
+  const value = String(status ?? '').trim().toLowerCase();
+
+  if (value === 'published') {
+    return { tracker_status: 'In account verified', ov: 'TRUE', ou: 'FALSE' };
+  }
+
+  if (value === 'not published' || value === 'duplicate') {
+    return { tracker_status: 'In account not verified', ov: 'FALSE', ou: 'TRUE' };
+  }
+
+  return null;
 }
 
 export function normalizeTrackerStatus(status: unknown): TrackerStatus | '' {

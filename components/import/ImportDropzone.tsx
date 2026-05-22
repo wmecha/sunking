@@ -10,6 +10,7 @@ interface ImportResult {
   published: number;
   notPublished: number;
   duplicate: number;
+  accountStatusUpdates?: number;
 }
 
 interface ImportDropzoneProps {
@@ -54,6 +55,7 @@ export function ImportDropzone({ onImportSuccess }: ImportDropzoneProps) {
         published: data.published,
         notPublished: data.notPublished,
         duplicate: data.duplicate,
+        accountStatusUpdates: data.accountStatusUpdates,
       });
       onImportSuccess();
     } catch {
@@ -172,6 +174,11 @@ export function ImportDropzone({ onImportSuccess }: ImportDropzoneProps) {
               <p className="text-xs text-gray-500">Duplicate</p>
             </div>
           </div>
+          {typeof result.accountStatusUpdates === 'number' && (
+            <p className="mt-3 text-xs text-green-800">
+              Updated OV/OU and tracker status for {result.accountStatusUpdates} matching tracker row(s).
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
-import { normalizeTrackerStatus } from '@/lib/status';
+import { accountStatusFromGbpStatus, normalizeTrackerStatus } from '@/lib/status';
 
 export async function GET() {
   await initializeSchema();
@@ -62,6 +62,10 @@ export async function POST() {
       gbp_status: string; tracker_status: string;
       direction: 'gbp_ahead' | 'tracker_ahead';
       suggested_tracker_status: string; // what tracker SHOULD say to match GBP
+      current_ov: string;
+      current_ou: string;
+      suggested_ov: string;
+      suggested_ou: string;
     }> = [];
     const fieldDiffs: Array<{
       store_code: string; business_name: string; field: string; gbp_value: string; tracker_value: string;
@@ -72,36 +76,32 @@ export async function POST() {
       if (trackerCodes.has(code)) {
         matched++;
         const trackerLoc = trackerCodes.get(code)!;
-        const gbpStatusLower = gbpLoc.status?.toLowerCase().trim() ?? '';
-        const gbpIsLive = gbpStatusLower === 'published';
         const trackerStatus = normalizeTrackerStatus(trackerLoc.tracker_status) || trackerLoc.tracker_status;
-        const trackerIsVerified = trackerStatus === 'In account verified';
-        const trackerIsAccountStatus =
-          trackerStatus === 'In account verified' || trackerStatus === 'In account not verified';
-        const suggestedFromGbp = gbpIsLive ? 'In account verified' : 'In account not verified';
+        const accountStatus = accountStatusFromGbpStatus(gbpLoc.status);
+        const currentOv = String(trackerLoc.ov ?? '').trim().toUpperCase();
+        const currentOu = String(trackerLoc.ou ?? '').trim().toUpperCase();
 
-        // GBP export only tells us account publication state. Claim workflow
-        // categories still come from the Master Tracker, not from this CSV.
-        if (trackerIsAccountStatus && gbpIsLive && !trackerIsVerified) {
-          statusMismatches.push({
-            store_code: code,
-            business_name: gbpLoc.business_name || trackerLoc.business_name,
-            gbp_status: gbpLoc.status,
-            tracker_status: trackerLoc.tracker_status,
-            direction: 'gbp_ahead',
-            suggested_tracker_status: suggestedFromGbp,
-          });
-        }
-
-        if (trackerIsAccountStatus && trackerIsVerified && !gbpIsLive && gbpStatusLower !== '') {
-          statusMismatches.push({
-            store_code: code,
-            business_name: gbpLoc.business_name || trackerLoc.business_name,
-            gbp_status: gbpLoc.status,
-            tracker_status: trackerLoc.tracker_status,
-            direction: 'tracker_ahead',
-            suggested_tracker_status: suggestedFromGbp,
-          });
+        if (accountStatus) {
+          const statusDiff = trackerStatus !== accountStatus.tracker_status;
+          const ovDiff = currentOv !== accountStatus.ov;
+          const ouDiff = currentOu !== accountStatus.ou;
+          if (statusDiff || ovDiff || ouDiff) {
+            const direction = accountStatus.tracker_status === 'In account verified'
+              ? 'gbp_ahead'
+              : 'tracker_ahead';
+            statusMismatches.push({
+              store_code: code,
+              business_name: gbpLoc.business_name || trackerLoc.business_name,
+              gbp_status: gbpLoc.status,
+              tracker_status: trackerLoc.tracker_status,
+              direction,
+              suggested_tracker_status: accountStatus.tracker_status,
+              current_ov: currentOv,
+              current_ou: currentOu,
+              suggested_ov: accountStatus.ov,
+              suggested_ou: accountStatus.ou,
+            });
+          }
         }
 
         // Field-level diff. Tracker `city` is the locality field.
@@ -122,8 +122,8 @@ export async function POST() {
           }
         }
 
-        if (gbpIsLive) ovConfirmed++;
-        if (!gbpIsLive && trackerStatus === 'In account not verified') ouConfirmed++;
+        if (accountStatus?.tracker_status === 'In account verified') ovConfirmed++;
+        if (accountStatus?.tracker_status === 'In account not verified') ouConfirmed++;
       } else {
         missingFromTracker.push(gbpLoc);
       }

@@ -11,17 +11,17 @@ import { TRACKER_STATUSES } from '@/lib/status';
  * Body shape:
  * {
  *   "updates": [
- *     { "store_code": "SKKE001", "tracker_status": "In account verified" },
- *     { "store_code": "SKKE002", "tracker_status": "In account not verified" },
+ *     { "store_code": "SKKE001", "tracker_status": "In account verified", "ov": "TRUE", "ou": "FALSE" },
+ *     { "store_code": "SKKE002", "tracker_status": "In account not verified", "ov": "FALSE", "ou": "TRUE" },
  *     ...
  *   ]
  * }
  *
  * Returns: { applied: N, skipped: M, errors: [...] }
  *
- * Only `tracker_status` can be set here — applying business_name / city / country
- * changes from GBP requires its own decision (do you trust Google's spelling or yours?),
- * so we surface those in the diff list but don't auto-apply.
+ * This endpoint only applies account-state fields from GBP reality:
+ * tracker_status, OV, and OU. Names, addresses, locality, and country remain
+ * review-only because those can be formatting differences rather than truth.
  */
 
 const ALLOWED_STATUSES = new Set<string>(TRACKER_STATUSES);
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   const db = getDb();
   try {
     const body = await request.json();
-    const updates: Array<{ store_code?: string; tracker_status?: string }> = Array.isArray(body?.updates)
+    const updates: Array<{ store_code?: string; tracker_status?: string; ov?: string; ou?: string }> = Array.isArray(body?.updates)
       ? body.updates
       : [];
 
@@ -45,15 +45,36 @@ export async function POST(request: NextRequest) {
     for (const u of updates) {
       const code = (u.store_code ?? '').toString().trim();
       const status = (u.tracker_status ?? '').toString().trim();
+      const ov = (u.ov ?? '').toString().trim().toUpperCase();
+      const ou = (u.ou ?? '').toString().trim().toUpperCase();
       if (!code) { skipped++; continue; }
       if (!ALLOWED_STATUSES.has(status)) {
         errors.push({ store_code: code, reason: `Invalid status '${status}'` });
         continue;
       }
+      if (ov && !['TRUE', 'FALSE'].includes(ov)) {
+        errors.push({ store_code: code, reason: `Invalid OV value '${ov}'` });
+        continue;
+      }
+      if (ou && !['TRUE', 'FALSE'].includes(ou)) {
+        errors.push({ store_code: code, reason: `Invalid OU value '${ou}'` });
+        continue;
+      }
       try {
+        const fields = ['tracker_status = ?'];
+        const args: string[] = [status];
+        if (ov) {
+          fields.push('ov = ?');
+          args.push(ov);
+        }
+        if (ou) {
+          fields.push('ou = ?');
+          args.push(ou);
+        }
+        fields.push('updated_at = NOW()');
         const res = await db.execute({
-          sql: 'UPDATE tracker_locations SET tracker_status = ? WHERE store_code = ?',
-          args: [status, code],
+          sql: `UPDATE tracker_locations SET ${fields.join(', ')} WHERE UPPER(TRIM(store_code)) = ?`,
+          args: [...args, code.toUpperCase()],
         });
         // postgres.js doesn't expose rowCount through our wrapper, so just count attempts
         applied++;

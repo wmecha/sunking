@@ -46,6 +46,10 @@ interface ReconciliationDetails {
     tracker_status: string;
     direction: 'gbp_ahead' | 'tracker_ahead';
     suggested_tracker_status: string;
+    current_ov: string;
+    current_ou: string;
+    suggested_ov: string;
+    suggested_ou: string;
   }>;
   fieldDiffs: Array<{
     store_code: string;
@@ -154,7 +158,12 @@ export default function ReconciliationPage() {
   }
 
   async function applyMismatchUpdates(
-    rows: Array<{ store_code: string; suggested_tracker_status: string }>,
+    rows: Array<{
+      store_code: string;
+      suggested_tracker_status: string;
+      suggested_ov?: string;
+      suggested_ou?: string;
+    }>,
   ) {
     if (rows.length === 0) return;
     setApplyResult(null);
@@ -166,6 +175,8 @@ export default function ReconciliationPage() {
           updates: rows.map((r) => ({
             store_code: r.store_code,
             tracker_status: r.suggested_tracker_status,
+            ov: r.suggested_ov,
+            ou: r.suggested_ou,
           })),
         }),
       });
@@ -182,7 +193,12 @@ export default function ReconciliationPage() {
     }
   }
 
-  async function handleApplyOne(row: { store_code: string; suggested_tracker_status: string }) {
+  async function handleApplyOne(row: {
+    store_code: string;
+    suggested_tracker_status: string;
+    suggested_ov?: string;
+    suggested_ou?: string;
+  }) {
     await applyMismatchUpdates([row]);
   }
 
@@ -419,7 +435,7 @@ export default function ReconciliationPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
                       <p className="text-sm text-amber-900">
                         <strong>{runResult.details.statusMismatches.length}</strong> status mismatch(es) between GBP and Tracker.
-                        Each row shows the suggested Tracker status to match what Google says.
+                        Each row shows the suggested Tracker status plus OV/OU values to match what Google says.
                       </p>
                       <Button
                         size="sm"
@@ -444,13 +460,14 @@ export default function ReconciliationPage() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Direction</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">GBP</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Tracker</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">OV / OU</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Suggested</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {runResult.details.statusMismatches.length === 0 ? (
-                        <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No status mismatches found.</td></tr>
+                        <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">No account-state mismatches found.</td></tr>
                       ) : runResult.details.statusMismatches.map((row, idx) => {
                         const applied = appliedCodes.has(row.store_code);
                         return (
@@ -468,6 +485,11 @@ export default function ReconciliationPage() {
                             </td>
                             <td className="px-4 py-3"><StatusBadge status={row.gbp_status} /></td>
                             <td className="px-4 py-3"><StatusBadge status={row.tracker_status} /></td>
+                            <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                              <span className="font-mono">OV {row.current_ov || '—'} → {row.suggested_ov || '—'}</span>
+                              <br />
+                              <span className="font-mono">OU {row.current_ou || '—'} → {row.suggested_ou || '—'}</span>
+                            </td>
                             <td className="px-4 py-3"><StatusBadge status={row.suggested_tracker_status} /></td>
                             <td className="px-4 py-3 text-right">
                               {applied ? (

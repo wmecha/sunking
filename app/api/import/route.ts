@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
+import { accountStatusFromGbpStatus } from '@/lib/status';
 import Papa from 'papaparse';
 
 export async function GET() {
@@ -68,12 +69,63 @@ export async function POST(request: NextRequest) {
       await db.batch(locationStatements.slice(i, i + chunkSize));
     }
 
+    const desiredAccountStatuses = rows
+      .map((row) => {
+        const storeCode = (row['Shop code'] || row['Store code'] || row['store_code'] || '').trim();
+        const accountStatus = accountStatusFromGbpStatus(row['Status']);
+        if (!storeCode || !accountStatus) return null;
+        return { storeCode: storeCode.toUpperCase(), accountStatus };
+      })
+      .filter((row): row is {
+        storeCode: string;
+        accountStatus: NonNullable<ReturnType<typeof accountStatusFromGbpStatus>>;
+      } => row !== null);
+
+    const uniqueDesiredByCode = new Map(desiredAccountStatuses.map((row) => [row.storeCode, row.accountStatus]));
+    const desiredCodes = Array.from(uniqueDesiredByCode.keys());
+    let existingCodes = new Set<string>();
+    if (desiredCodes.length > 0) {
+      const existingResult = await db.execute({
+        sql: `
+          SELECT UPPER(TRIM(store_code)) AS store_code
+          FROM tracker_locations
+          WHERE UPPER(TRIM(store_code)) IN (${desiredCodes.map(() => '?').join(',')})
+        `,
+        args: desiredCodes,
+      });
+      existingCodes = new Set(existingResult.rows.map((r) => String(r.store_code ?? '')));
+    }
+
+    const accountStatusUpdates = Array.from(uniqueDesiredByCode.entries())
+      .map(([storeCode, accountStatus]) => {
+        if (!existingCodes.has(storeCode)) return null;
+        return {
+          sql: `
+            UPDATE tracker_locations
+            SET ov = ?, ou = ?, tracker_status = ?, updated_at = NOW()
+            WHERE UPPER(TRIM(store_code)) = ?
+          `,
+          args: [
+            accountStatus.ov,
+            accountStatus.ou,
+            accountStatus.tracker_status,
+            storeCode,
+          ],
+        };
+      })
+      .filter((stmt): stmt is { sql: string; args: string[] } => stmt !== null);
+
+    for (let i = 0; i < accountStatusUpdates.length; i += chunkSize) {
+      await db.batch(accountStatusUpdates.slice(i, i + chunkSize));
+    }
+
     await logAction('import_gbp_csv', {
       filename: file.name,
       total: rows.length,
       published,
       notPublished,
       duplicate,
+      accountStatusUpdates: accountStatusUpdates.length,
     }, 'gbp_snapshot', String(snapshotId));
 
     return NextResponse.json({
@@ -84,6 +136,7 @@ export async function POST(request: NextRequest) {
       published,
       notPublished,
       duplicate,
+      accountStatusUpdates: accountStatusUpdates.length,
     });
   } catch (error) {
     console.error('[import] POST error:', error);
