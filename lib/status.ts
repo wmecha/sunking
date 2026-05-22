@@ -25,6 +25,10 @@ function isTruthy(value: unknown): boolean {
   return ['true', 'yes', '1', 'done'].includes(String(value ?? '').trim().toLowerCase());
 }
 
+export function normalizeAccountFlag(value: unknown): 'TRUE' | 'FALSE' {
+  return isTruthy(value) ? 'TRUE' : 'FALSE';
+}
+
 /**
  * Column F in the Master Tracker is the operational claim-state source.
  * For rows already in account, OV decides whether they are verified.

@@ -4,7 +4,20 @@ import { NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
-import { accountStatusFromGbpStatus, normalizeTrackerStatus } from '@/lib/status';
+import { toIso2 } from '@/lib/countries';
+import { accountStatusFromGbpStatus, normalizeAccountFlag, normalizeTrackerStatus } from '@/lib/status';
+
+function normText(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function comparableCountry(value: unknown): string {
+  return toIso2(String(value ?? '')).toLowerCase();
+}
+
+function isDuplicateGbpRow(status: unknown): boolean {
+  return String(status ?? '').trim().toLowerCase() === 'duplicate';
+}
 
 export async function GET() {
   await initializeSchema();
@@ -78,8 +91,8 @@ export async function POST() {
         const trackerLoc = trackerCodes.get(code)!;
         const trackerStatus = normalizeTrackerStatus(trackerLoc.tracker_status) || trackerLoc.tracker_status;
         const accountStatus = accountStatusFromGbpStatus(gbpLoc.status);
-        const currentOv = String(trackerLoc.ov ?? '').trim().toUpperCase();
-        const currentOu = String(trackerLoc.ou ?? '').trim().toUpperCase();
+        const currentOv = normalizeAccountFlag(trackerLoc.ov);
+        const currentOu = normalizeAccountFlag(trackerLoc.ou);
 
         if (accountStatus) {
           const statusDiff = trackerStatus !== accountStatus.tracker_status;
@@ -111,7 +124,10 @@ export async function POST() {
           ['Country',       gbpLoc.country,        trackerLoc.country],
         ];
         for (const [field, gbpVal, trackerVal] of fieldChecks) {
-          if (gbpVal && trackerVal && gbpVal.trim().toLowerCase() !== trackerVal.trim().toLowerCase()) {
+          const differs = field === 'Country'
+            ? comparableCountry(gbpVal) !== comparableCountry(trackerVal)
+            : normText(gbpVal) !== normText(trackerVal);
+          if (gbpVal && trackerVal && differs) {
             fieldDiffs.push({
               store_code: code,
               business_name: gbpLoc.business_name || trackerLoc.business_name,
@@ -125,7 +141,9 @@ export async function POST() {
         if (accountStatus?.tracker_status === 'In account verified') ovConfirmed++;
         if (accountStatus?.tracker_status === 'In account not verified') ouConfirmed++;
       } else {
-        missingFromTracker.push(gbpLoc);
+        if (!isDuplicateGbpRow(gbpLoc.status)) {
+          missingFromTracker.push(gbpLoc);
+        }
       }
     }
 
