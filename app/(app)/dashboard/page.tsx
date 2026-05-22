@@ -52,6 +52,15 @@ function statusSql(status: TrackerStatus): string {
   return TRACKER_STATUS_ALIASES[status].map((s) => `'${s.replace(/'/g, "''")}'`).join(',');
 }
 
+const submittedWorkflowSql = `
+  (
+    claiming_issue ILIKE '%Awaiting Response%'
+    OR tracker_status IN (${statusSql('Submitted Claim Awaiting Response')})
+  )
+`;
+
+const noClaimWorkflowSql = "claiming_issue ILIKE '%No Claim Option%'";
+
 async function getDashboardData() {
   await initializeSchema();
   const db = getDb();
@@ -66,16 +75,16 @@ async function getDashboardData() {
   ] =
     await Promise.all([
       db.execute("SELECT COUNT(*) as count FROM tracker_locations"),
-      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE claiming_issue ILIKE '%Awaiting Response%'"),
-      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE claiming_issue ILIKE '%No Claim Option%'"),
+      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE ${submittedWorkflowSql}`),
+      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE ${noClaimWorkflowSql}`),
       db.execute(`
         SELECT
           country,
           COUNT(*) as total,
           SUM(CASE WHEN tracker_status IN (${statusSql('In account verified')}) THEN 1 ELSE 0 END) as in_account_verified,
           SUM(CASE WHEN tracker_status IN (${statusSql('In account not verified')}) THEN 1 ELSE 0 END) as in_account_not_verified,
-          SUM(CASE WHEN tracker_status IN (${statusSql('Submitted Claim Awaiting Response')}) THEN 1 ELSE 0 END) as submitted_claim_awaiting_response,
-          SUM(CASE WHEN tracker_status IN (${statusSql('No claim Option')}) THEN 1 ELSE 0 END) as no_claim_option
+          SUM(CASE WHEN ${submittedWorkflowSql} THEN 1 ELSE 0 END) as submitted_claim_awaiting_response,
+          SUM(CASE WHEN ${noClaimWorkflowSql} THEN 1 ELSE 0 END) as no_claim_option
         FROM tracker_locations
         WHERE country IS NOT NULL AND country != ''
         GROUP BY country
