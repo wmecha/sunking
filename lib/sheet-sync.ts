@@ -35,8 +35,6 @@ const COLUMNS = [
   'action_taken',
   'address',
   'city',
-  'latitude',
-  'longitude',
   'google_maps_url',
 ] as const;
 type Column = (typeof COLUMNS)[number];
@@ -59,8 +57,6 @@ const COLUMN_HEADERS: Record<Column, string[]> = {
   action_taken: ['Action Taken'],
   address: ['Address Line 1', 'Address'],
   city: ['Locality', 'City'],
-  latitude: ['Phil Verified Lat', 'Latitude', 'Lat', 'Store Loc Lat', 'Store Locator Lat'],
-  longitude: ['Phil Verified Lng', 'Longitude', 'Lng', 'Long', 'Store Loc Lng', 'Store Locator Lng'],
   google_maps_url: ['Google Maps Link', 'Google Maps URL', 'Maps URL', 'Maps Link', 'GMaps URL', 'Map Link'],
 };
 
@@ -106,14 +102,6 @@ function toSheetRow(r: Record<string, unknown>): string[] {
 function normalizeSheetValue(column: Column, value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return '';
-
-  if (column === 'latitude' || column === 'longitude') {
-    const numeric = Number(trimmed);
-    const min = column === 'latitude' ? -90 : -180;
-    const max = column === 'latitude' ? 90 : 180;
-    if (!Number.isFinite(numeric) || numeric < min || numeric > max) return '';
-    return String(numeric);
-  }
 
   return trimmed;
 }
