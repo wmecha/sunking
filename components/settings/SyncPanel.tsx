@@ -19,7 +19,7 @@ interface PullPreview {
   updated: number;
   unchanged: number;
   not_in_db: string[];
-  applied_changes: Array<{ store_code: string; changes: Record<string, [unknown, unknown]> }>;
+  applied_changes: Array<{ store_code: string; match_store_code?: string; changes: Record<string, [unknown, unknown]> }>;
 }
 
 interface PushPreview {
@@ -54,6 +54,7 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [showAllPushChanges, setShowAllPushChanges] = useState(false);
   const [showAllPullChanges, setShowAllPullChanges] = useState(false);
+  const [selectedPullCodes, setSelectedPullCodes] = useState<Set<string>>(new Set());
 
   async function handlePushPreview() {
     setStatus({ kind: 'running', op: 'push-preview' });
@@ -104,12 +105,14 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
     setStatus({ kind: 'running', op: 'preview' });
     setPreview(null);
     setShowAllPullChanges(false);
+    setSelectedPullCodes(new Set());
     setProgress(null);
     try {
       const res = await fetch('/api/sync/pull', { method: 'GET' });
       const json = await readApiResponse(res);
       if (!res.ok) throw new Error(json.error || 'Preview failed');
       setPreview(json);
+      setSelectedPullCodes(new Set(json.applied_changes.map((change: PullPreview['applied_changes'][number]) => change.store_code)));
       setStatus({ kind: 'idle' });
     } catch (e) {
       setStatus({ kind: 'error', op: 'preview', message: e instanceof Error ? e.message : 'Preview failed' });
@@ -118,8 +121,9 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
 
   async function handlePullApply() {
     if (!preview) return;
-    const changes = preview.applied_changes;
-    if (!confirm(`Apply ${changes.length} DB update(s), one at a time?`)) return;
+    const changes = preview.applied_changes.filter((change) => selectedPullCodes.has(change.store_code));
+    if (changes.length === 0) return;
+    if (!confirm(`Apply ${changes.length} selected DB update(s), one at a time?`)) return;
     setStatus({ kind: 'running', op: 'pull' });
     setProgress({ done: 0, total: changes.length });
     try {
@@ -140,9 +144,10 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
       setStatus({
         kind: 'success',
         op: 'pull',
-        message: `Applied ${applied} update(s). ${preview.unchanged} unchanged. ${preview.not_in_db.length} sheet row(s) had no matching DB record.`,
+        message: `Applied ${applied} selected update(s). ${preview.unchanged} unchanged. ${preview.not_in_db.length} sheet row(s) had no matching DB record.`,
       });
       setPreview(null);
+      setSelectedPullCodes(new Set());
       setProgress(null);
     } catch (e) {
       setStatus({ kind: 'error', op: 'pull', message: e instanceof Error ? e.message : 'Pull failed' });
@@ -171,6 +176,9 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   const visiblePullChanges = preview
     ? preview.applied_changes.slice(0, showAllPullChanges ? preview.applied_changes.length : 20)
     : [];
+  const selectedPullCount = preview
+    ? preview.applied_changes.filter((change) => selectedPullCodes.has(change.store_code)).length
+    : 0;
 
   return (
     <div className="space-y-4">
@@ -246,13 +254,13 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
             {preview && preview.updated > 0 && (
               <button
                 onClick={handlePullApply}
-                disabled={isRunning}
+                disabled={isRunning || selectedPullCount === 0}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold rounded-md bg-[#F5C000] text-[#1C2B3A] hover:bg-yellow-400 disabled:opacity-50 transition-colors"
               >
                 {status.kind === 'running' && status.op === 'pull' ? (
                   <><Loader2 size={14} className="animate-spin" /> Applying...</>
                 ) : (
-                  <><ArrowDownCircle size={14} /> Apply {preview.updated} update(s)</>
+                  <><ArrowDownCircle size={14} /> Apply {selectedPullCount} selected update(s)</>
                 )}
               </button>
             )}
@@ -354,31 +362,86 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
             </p>
           )}
           {preview.applied_changes.length > 0 && (
-            <div className="max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded p-2">
-              {visiblePullChanges.map(({ store_code, changes }) => (
-                <div key={store_code} className="text-xs py-1.5 border-b last:border-0 border-[#E5E7EB]">
-                  <div className="font-mono font-semibold text-[#1C2B3A]">{store_code}</div>
-                  {Object.entries(changes).map(([field, [oldV, newV]]) => (
-                    <div key={field} className="ml-3 text-gray-600">
-                      <span className="text-gray-400">{field}:</span>{' '}
-                      <span className="line-through text-red-600">{String(oldV) || '(empty)'}</span>
-                      {' → '}
-                      <span className="text-green-700">{String(newV) || '(empty)'}</span>
-                    </div>
-                  ))}
+            <div className="space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-gray-500">
+                  {selectedPullCount} of {preview.applied_changes.length} proposed DB update(s) selected.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => setSelectedPullCodes(new Set(preview.applied_changes.map((change) => change.store_code)))}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded border border-[#1C2B3A] text-[#1C2B3A] hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => setSelectedPullCodes(new Set())}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
                 </div>
-              ))}
-              {preview.applied_changes.length > 20 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllPullChanges((v) => !v)}
-                  className="w-full text-xs text-[#1C2B3A] hover:text-[#F5C000] font-medium text-center pt-2"
-                >
-                  {showAllPullChanges
-                    ? 'Show first 20 only'
-                    : `Show all ${preview.applied_changes.length} proposed DB changes`}
-                </button>
-              )}
+              </div>
+              <div className="max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded p-2">
+                {visiblePullChanges.map(({ store_code, match_store_code, changes }) => {
+                  const selected = selectedPullCodes.has(store_code);
+                  return (
+                    <label
+                      key={store_code}
+                      className={`flex gap-2 text-xs py-1.5 border-b last:border-0 border-[#E5E7EB] ${isRunning ? 'opacity-60' : 'cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={isRunning}
+                        onChange={(event) => {
+                          setSelectedPullCodes((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) {
+                              next.add(store_code);
+                            } else {
+                              next.delete(store_code);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#F5C000] focus:ring-[#F5C000]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-mono font-semibold text-[#1C2B3A]">
+                          {store_code}
+                          {match_store_code && match_store_code !== store_code ? (
+                            <span className="font-sans text-[10px] text-gray-400"> → DB {match_store_code}</span>
+                          ) : null}
+                        </span>
+                        {Object.entries(changes).map(([field, [oldV, newV]]) => (
+                          <span key={field} className="block ml-3 text-gray-600">
+                            <span className="text-gray-400">{field}:</span>{' '}
+                            <span className="line-through text-red-600">{String(oldV) || '(empty)'}</span>
+                            {' → '}
+                            <span className="text-green-700">{String(newV) || '(empty)'}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </label>
+                  );
+                })}
+                {preview.applied_changes.length > 20 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPullChanges((v) => !v)}
+                    className="w-full text-xs text-[#1C2B3A] hover:text-[#F5C000] font-medium text-center pt-2"
+                  >
+                    {showAllPullChanges
+                      ? 'Show first 20 only'
+                      : `Show all ${preview.applied_changes.length} proposed DB changes`}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
