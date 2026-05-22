@@ -59,8 +59,8 @@ const COLUMN_HEADERS: Record<Column, string[]> = {
   action_taken: ['Action Taken'],
   address: ['Address Line 1', 'Address'],
   city: ['Locality', 'City'],
-  latitude: ['Latitude', 'Lat'],
-  longitude: ['Longitude', 'Lng', 'Long'],
+  latitude: ['Phil Verified Lat', 'Latitude', 'Lat', 'Store Loc Lat', 'Store Locator Lat'],
+  longitude: ['Phil Verified Lng', 'Longitude', 'Lng', 'Long', 'Store Loc Lng', 'Store Locator Lng'],
   google_maps_url: ['Google Maps Link', 'Google Maps URL', 'Maps URL', 'Maps Link', 'GMaps URL', 'Map Link'],
 };
 
