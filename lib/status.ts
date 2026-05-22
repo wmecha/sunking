@@ -29,16 +29,39 @@ export function normalizeAccountFlag(value: unknown): 'TRUE' | 'FALSE' {
   return isTruthy(value) ? 'TRUE' : 'FALSE';
 }
 
-/**
- * Column F in the Master Tracker is the operational claim-state source.
- * For rows already in account, OV decides whether they are verified.
- */
-export function deriveTrackerStatusFromSheet(row: {
-  claiming_issue?: unknown;
-  ov?: unknown;
-  ou?: unknown;
-}): TrackerStatus {
-  const issue = String(row.claiming_issue ?? '').toLowerCase();
+export function workflowStatusFromClaimingIssue(claimingIssue: unknown): Extract<
+  TrackerStatus,
+  'Submitted Claim Awaiting Response' | 'No claim Option'
+> | null {
+  const issue = String(claimingIssue ?? '').toLowerCase();
+
+  if (issue.includes('awaiting response')) {
+    return 'Submitted Claim Awaiting Response';
+  }
+
+  if (issue.includes('no claim option')) {
+    return 'No claim Option';
+  }
+
+  return null;
+}
+
+export function trackerStatusFromClaimingIssueAndAccount(
+  row: {
+    claiming_issue?: unknown;
+    ov?: unknown;
+    ou?: unknown;
+  },
+  accountStatus?: { tracker_status: TrackerStatus } | null
+): TrackerStatus {
+  const workflowStatus = workflowStatusFromClaimingIssue(row.claiming_issue);
+  if (workflowStatus) {
+    return workflowStatus;
+  }
+
+  if (accountStatus) {
+    return accountStatus.tracker_status;
+  }
 
   if (isTruthy(row.ov)) {
     return 'In account verified';
@@ -48,15 +71,19 @@ export function deriveTrackerStatusFromSheet(row: {
     return 'In account not verified';
   }
 
-  if (issue.includes('awaiting response')) {
-    return 'Submitted Claim Awaiting Response';
-  }
+  return 'In account not verified';
+}
 
-  if (issue.includes('no claim option') || issue.includes('no location pin')) {
-    return 'No claim Option';
-  }
-
-  return isTruthy(row.ov) ? 'In account verified' : 'In account not verified';
+/**
+ * Column F in the Master Tracker is the operational claim-state source.
+ * OV/OU only split clean in-account rows into verified vs not verified.
+ */
+export function deriveTrackerStatusFromSheet(row: {
+  claiming_issue?: unknown;
+  ov?: unknown;
+  ou?: unknown;
+}): TrackerStatus {
+  return trackerStatusFromClaimingIssueAndAccount(row);
 }
 
 export function accountStatusFromGbpStatus(status: unknown): {

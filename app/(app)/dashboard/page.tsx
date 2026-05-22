@@ -52,12 +52,7 @@ function statusSql(status: TrackerStatus): string {
   return TRACKER_STATUS_ALIASES[status].map((s) => `'${s.replace(/'/g, "''")}'`).join(',');
 }
 
-const submittedWorkflowSql = `
-  (
-    claiming_issue ILIKE '%Awaiting Response%'
-    OR tracker_status IN (${statusSql('Submitted Claim Awaiting Response')})
-  )
-`;
+const submittedWorkflowSql = "claiming_issue ILIKE '%Awaiting Response%'";
 
 const noClaimWorkflowSql = "claiming_issue ILIKE '%No Claim Option%'";
 

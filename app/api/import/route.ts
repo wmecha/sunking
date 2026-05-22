@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
-import { accountStatusFromGbpStatus } from '@/lib/status';
+import { accountStatusFromGbpStatus, trackerStatusFromClaimingIssueAndAccount } from '@/lib/status';
 import { legacyStoreCodesFor, normalizeStoreCode } from '@/lib/store-code-aliases';
 import Papa from 'papaparse';
 
@@ -88,25 +88,35 @@ export async function POST(request: NextRequest) {
       ...desiredCodes,
       ...desiredCodes.flatMap((code) => legacyStoreCodesFor(code).map(normalizeStoreCode)),
     ]));
-    let existingCodes = new Set<string>();
+    let existingByCode = new Map<string, { claiming_issue: unknown }>();
     if (lookupCodes.length > 0) {
       const existingResult = await db.execute({
         sql: `
-          SELECT UPPER(TRIM(store_code)) AS store_code
+          SELECT UPPER(TRIM(store_code)) AS store_code, claiming_issue
           FROM tracker_locations
           WHERE UPPER(TRIM(store_code)) IN (${lookupCodes.map(() => '?').join(',')})
         `,
         args: lookupCodes,
       });
-      existingCodes = new Set(existingResult.rows.map((r) => String(r.store_code ?? '')));
+      existingByCode = new Map(
+        existingResult.rows.map((r) => [
+          String(r.store_code ?? ''),
+          { claiming_issue: r.claiming_issue },
+        ])
+      );
     }
 
     const accountStatusUpdates = Array.from(uniqueDesiredByCode.entries())
       .map(([storeCode, accountStatus]) => {
-        const matchStoreCode = existingCodes.has(storeCode)
+        const matchStoreCode = existingByCode.has(storeCode)
           ? storeCode
-          : legacyStoreCodesFor(storeCode).map(normalizeStoreCode).find((legacyCode) => existingCodes.has(legacyCode));
+          : legacyStoreCodesFor(storeCode).map(normalizeStoreCode).find((legacyCode) => existingByCode.has(legacyCode));
         if (!matchStoreCode) return null;
+        const existing = existingByCode.get(matchStoreCode);
+        const trackerStatus = trackerStatusFromClaimingIssueAndAccount(
+          { claiming_issue: existing?.claiming_issue },
+          accountStatus
+        );
         return {
           sql: `
             UPDATE tracker_locations
@@ -117,7 +127,7 @@ export async function POST(request: NextRequest) {
             storeCode,
             accountStatus.ov,
             accountStatus.ou,
-            accountStatus.tracker_status,
+            trackerStatus,
             matchStoreCode,
           ],
         };

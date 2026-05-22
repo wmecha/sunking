@@ -43,10 +43,8 @@ export async function GET(request: NextRequest) {
     if (account === 'out') {
       whereParts.push(`(
         t.claiming_issue ILIKE '%Awaiting Response%'
-        OR t.tracker_status IN (${TRACKER_STATUS_ALIASES['Submitted Claim Awaiting Response'].map(() => '?').join(',')})
         OR t.claiming_issue ILIKE '%No Claim Option%'
       )`);
-      params.push(...TRACKER_STATUS_ALIASES['Submitted Claim Awaiting Response']);
     }
     if (gbpStatus === 'published') {
       whereParts.push(`EXISTS (
@@ -67,12 +65,7 @@ export async function GET(request: NextRequest) {
       )`);
     }
     if (workflow === 'submitted') {
-      const aliases = TRACKER_STATUS_ALIASES['Submitted Claim Awaiting Response'];
-      whereParts.push(`(
-        t.claiming_issue ILIKE '%Awaiting Response%'
-        OR t.tracker_status IN (${aliases.map(() => '?').join(',')})
-      )`);
-      params.push(...aliases);
+      whereParts.push("t.claiming_issue ILIKE '%Awaiting Response%'");
     }
     if (workflow === 'no_claim') {
       whereParts.push("t.claiming_issue ILIKE '%No Claim Option%'");

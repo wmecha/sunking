@@ -5,7 +5,12 @@ import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
 import { toIso2 } from '@/lib/countries';
-import { accountStatusFromGbpStatus, normalizeAccountFlag, normalizeTrackerStatus } from '@/lib/status';
+import {
+  accountStatusFromGbpStatus,
+  normalizeAccountFlag,
+  normalizeTrackerStatus,
+  trackerStatusFromClaimingIssueAndAccount,
+} from '@/lib/status';
 
 function normText(value: unknown): string {
   return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -56,7 +61,7 @@ export async function POST() {
     const trackerResult = await db.execute('SELECT * FROM tracker_locations');
     const trackerLocations = trackerResult.rows as unknown as Array<{
       id: number; store_code: string; business_name: string; tracker_status: string;
-      address: string; city: string; country: string; ov: string; ou: string;
+      address: string; city: string; country: string; ov: string; ou: string; claiming_issue: string;
     }>;
 
     const gbpCodes = new Map(
@@ -95,7 +100,11 @@ export async function POST() {
         const currentOu = normalizeAccountFlag(trackerLoc.ou);
 
         if (accountStatus) {
-          const statusDiff = trackerStatus !== accountStatus.tracker_status;
+          const suggestedTrackerStatus = trackerStatusFromClaimingIssueAndAccount(
+            { claiming_issue: trackerLoc.claiming_issue },
+            accountStatus
+          );
+          const statusDiff = trackerStatus !== suggestedTrackerStatus;
           const ovDiff = currentOv !== accountStatus.ov;
           const ouDiff = currentOu !== accountStatus.ou;
           if (statusDiff || ovDiff || ouDiff) {
@@ -108,7 +117,7 @@ export async function POST() {
               gbp_status: gbpLoc.status,
               tracker_status: trackerLoc.tracker_status,
               direction,
-              suggested_tracker_status: accountStatus.tracker_status,
+              suggested_tracker_status: suggestedTrackerStatus,
               current_ov: currentOv,
               current_ou: currentOu,
               suggested_ov: accountStatus.ov,

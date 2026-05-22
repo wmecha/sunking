@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import getDb from '@/lib/db';
 import { logAction } from '@/lib/audit';
-import { TRACKER_STATUSES } from '@/lib/status';
+import { TRACKER_STATUSES, trackerStatusFromClaimingIssueAndAccount, type TrackerStatus } from '@/lib/status';
 
 /**
  * Apply reconciliation suggestions to the tracker.
@@ -61,8 +61,21 @@ export async function POST(request: NextRequest) {
         continue;
       }
       try {
+        const currentResult = await db.execute({
+          sql: `SELECT claiming_issue FROM tracker_locations WHERE UPPER(TRIM(store_code)) = ? LIMIT 1`,
+          args: [code.toUpperCase()],
+        });
+        const current = currentResult.rows[0] as { claiming_issue?: unknown } | undefined;
+        if (!current) {
+          skipped++;
+          continue;
+        }
+        const finalStatus = trackerStatusFromClaimingIssueAndAccount(
+          { claiming_issue: current.claiming_issue },
+          { tracker_status: status as TrackerStatus }
+        );
         const fields = ['tracker_status = ?'];
-        const args: string[] = [status];
+        const args: string[] = [finalStatus];
         if (ov) {
           fields.push('ov = ?');
           args.push(ov);
