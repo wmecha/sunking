@@ -54,18 +54,21 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [showAllPushChanges, setShowAllPushChanges] = useState(false);
   const [showAllPullChanges, setShowAllPullChanges] = useState(false);
+  const [selectedPushCodes, setSelectedPushCodes] = useState<Set<string>>(new Set());
   const [selectedPullCodes, setSelectedPullCodes] = useState<Set<string>>(new Set());
 
   async function handlePushPreview() {
     setStatus({ kind: 'running', op: 'push-preview' });
     setPushPreview(null);
     setShowAllPushChanges(false);
+    setSelectedPushCodes(new Set());
     setProgress(null);
     try {
       const res = await fetch('/api/sync/push', { method: 'GET' });
       const json = await readApiResponse(res);
       if (!res.ok) throw new Error(json.error || 'Push preview failed');
       setPushPreview(json);
+      setSelectedPushCodes(new Set(json.applied_changes.map((change: PushPreview['applied_changes'][number]) => change.store_code)));
       setStatus({ kind: 'idle' });
     } catch (e) {
       setStatus({ kind: 'error', op: 'push-preview', message: e instanceof Error ? e.message : 'Push preview failed' });
@@ -74,8 +77,9 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
 
   async function handlePushApply() {
     if (!pushPreview) return;
-    const changes = pushPreview.applied_changes;
-    if (!confirm(`Apply ${changes.length} Sheet update(s), one at a time?`)) return;
+    const changes = pushPreview.applied_changes.filter((change) => selectedPushCodes.has(change.store_code));
+    if (changes.length === 0) return;
+    if (!confirm(`Apply ${changes.length} selected Sheet update(s), one at a time?`)) return;
     setStatus({ kind: 'running', op: 'push' });
     setProgress({ done: 0, total: changes.length });
     try {
@@ -93,8 +97,9 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
         setProgress({ done: Math.min(i + chunk.length, changes.length), total: changes.length });
         if (i + chunk.length < changes.length) await pause(SYNC_STEP_DELAY_MS);
       }
-      setStatus({ kind: 'success', op: 'push', message: `Pushed ${pushed} row update(s) to the Sheet.` });
+      setStatus({ kind: 'success', op: 'push', message: `Pushed ${pushed} selected row update(s) to the Sheet.` });
       setPushPreview(null);
+      setSelectedPushCodes(new Set());
       setProgress(null);
     } catch (e) {
       setStatus({ kind: 'error', op: 'push', message: e instanceof Error ? e.message : 'Push failed' });
@@ -179,6 +184,9 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
   const selectedPullCount = preview
     ? preview.applied_changes.filter((change) => selectedPullCodes.has(change.store_code)).length
     : 0;
+  const selectedPushCount = pushPreview
+    ? pushPreview.applied_changes.filter((change) => selectedPushCodes.has(change.store_code)).length
+    : 0;
 
   return (
     <div className="space-y-4">
@@ -216,13 +224,13 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
             {pushPreview && pushPreview.applied_changes.length > 0 && (
               <button
                 onClick={handlePushApply}
-                disabled={isRunning}
+                disabled={isRunning || selectedPushCount === 0}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold rounded-md bg-[#1C2B3A] text-white hover:bg-[#0F1B2A] disabled:opacity-50 transition-colors"
               >
                 {status.kind === 'running' && status.op === 'push' ? (
                   <><Loader2 size={14} className="animate-spin" /> Pushing...</>
                 ) : (
-                  <><ArrowUpCircle size={14} /> Apply {pushPreview.applied_changes.length} Sheet update(s)</>
+                  <><ArrowUpCircle size={14} /> Apply {selectedPushCount} selected update(s)</>
                 )}
               </button>
             )}
@@ -313,33 +321,83 @@ export function SyncPanel({ syncEnabled, sheetUrl }: SyncPanelProps) {
             <Stat label="Unchanged" value={pushPreview.unchanged} />
           </div>
           {pushPreview.applied_changes.length > 0 && (
-            <div className="max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded p-2">
-              {visiblePushChanges.map(({ store_code, mode, changes }) => (
-                <div key={store_code} className="text-xs py-1.5 border-b last:border-0 border-[#E5E7EB]">
-                  <div className="font-mono font-semibold text-[#1C2B3A]">
-                    {store_code} <span className="font-sans text-[10px] uppercase text-gray-400">({mode})</span>
-                  </div>
-                  {Object.entries(changes).map(([field, [oldV, newV]]) => (
-                    <div key={field} className="ml-3 text-gray-600">
-                      <span className="text-gray-400">{field}:</span>{' '}
-                      <span className="line-through text-red-600">{String(oldV) || '(empty)'}</span>
-                      {' → '}
-                      <span className="text-green-700">{String(newV) || '(empty)'}</span>
-                    </div>
-                  ))}
+            <div className="space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-gray-500">
+                  {selectedPushCount} of {pushPreview.applied_changes.length} proposed Sheet update(s) selected.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => setSelectedPushCodes(new Set(pushPreview.applied_changes.map((change) => change.store_code)))}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded border border-[#1C2B3A] text-[#1C2B3A] hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRunning}
+                    onClick={() => setSelectedPushCodes(new Set())}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
                 </div>
-              ))}
-              {pushPreview.applied_changes.length > 20 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllPushChanges((v) => !v)}
-                  className="w-full text-xs text-[#1C2B3A] hover:text-[#F5C000] font-medium text-center pt-2"
-                >
-                  {showAllPushChanges
-                    ? 'Show first 20 only'
-                    : `Show all ${pushPreview.applied_changes.length} proposed Sheet changes`}
-                </button>
-              )}
+              </div>
+              <div className="max-h-64 overflow-y-auto bg-white border border-[#E5E7EB] rounded p-2">
+                {visiblePushChanges.map(({ store_code, mode, changes }) => {
+                  const selected = selectedPushCodes.has(store_code);
+                  return (
+                    <label
+                      key={store_code}
+                      className={`flex gap-2 text-xs py-1.5 border-b last:border-0 border-[#E5E7EB] ${isRunning ? 'opacity-60' : 'cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={isRunning}
+                        onChange={(event) => {
+                          setSelectedPushCodes((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) {
+                              next.add(store_code);
+                            } else {
+                              next.delete(store_code);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#F5C000] focus:ring-[#F5C000]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-mono font-semibold text-[#1C2B3A]">
+                          {store_code} <span className="font-sans text-[10px] uppercase text-gray-400">({mode})</span>
+                        </span>
+                        {Object.entries(changes).map(([field, [oldV, newV]]) => (
+                          <span key={field} className="block ml-3 text-gray-600">
+                            <span className="text-gray-400">{field}:</span>{' '}
+                            <span className="line-through text-red-600">{String(oldV) || '(empty)'}</span>
+                            {' → '}
+                            <span className="text-green-700">{String(newV) || '(empty)'}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </label>
+                  );
+                })}
+                {pushPreview.applied_changes.length > 20 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPushChanges((v) => !v)}
+                    className="w-full text-xs text-[#1C2B3A] hover:text-[#F5C000] font-medium text-center pt-2"
+                  >
+                    {showAllPushChanges
+                      ? 'Show first 20 only'
+                      : `Show all ${pushPreview.applied_changes.length} proposed Sheet changes`}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
