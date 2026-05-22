@@ -5,6 +5,7 @@ import getDb from '@/lib/db';
 import { initializeSchema } from '@/lib/schema';
 import { logAction } from '@/lib/audit';
 import { accountStatusFromGbpStatus } from '@/lib/status';
+import { legacyStoreCodesFor, normalizeStoreCode } from '@/lib/store-code-aliases';
 import Papa from 'papaparse';
 
 export async function GET() {
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
         const storeCode = (row['Shop code'] || row['Store code'] || row['store_code'] || '').trim();
         const accountStatus = accountStatusFromGbpStatus(row['Status']);
         if (!storeCode || !accountStatus) return null;
-        return { storeCode: storeCode.toUpperCase(), accountStatus };
+        return { storeCode: normalizeStoreCode(storeCode), accountStatus };
       })
       .filter((row): row is {
         storeCode: string;
@@ -83,33 +84,41 @@ export async function POST(request: NextRequest) {
 
     const uniqueDesiredByCode = new Map(desiredAccountStatuses.map((row) => [row.storeCode, row.accountStatus]));
     const desiredCodes = Array.from(uniqueDesiredByCode.keys());
+    const lookupCodes = Array.from(new Set([
+      ...desiredCodes,
+      ...desiredCodes.flatMap((code) => legacyStoreCodesFor(code).map(normalizeStoreCode)),
+    ]));
     let existingCodes = new Set<string>();
-    if (desiredCodes.length > 0) {
+    if (lookupCodes.length > 0) {
       const existingResult = await db.execute({
         sql: `
           SELECT UPPER(TRIM(store_code)) AS store_code
           FROM tracker_locations
-          WHERE UPPER(TRIM(store_code)) IN (${desiredCodes.map(() => '?').join(',')})
+          WHERE UPPER(TRIM(store_code)) IN (${lookupCodes.map(() => '?').join(',')})
         `,
-        args: desiredCodes,
+        args: lookupCodes,
       });
       existingCodes = new Set(existingResult.rows.map((r) => String(r.store_code ?? '')));
     }
 
     const accountStatusUpdates = Array.from(uniqueDesiredByCode.entries())
       .map(([storeCode, accountStatus]) => {
-        if (!existingCodes.has(storeCode)) return null;
+        const matchStoreCode = existingCodes.has(storeCode)
+          ? storeCode
+          : legacyStoreCodesFor(storeCode).map(normalizeStoreCode).find((legacyCode) => existingCodes.has(legacyCode));
+        if (!matchStoreCode) return null;
         return {
           sql: `
             UPDATE tracker_locations
-            SET ov = ?, ou = ?, tracker_status = ?, updated_at = NOW()
+            SET store_code = ?, ov = ?, ou = ?, tracker_status = ?, updated_at = NOW()
             WHERE UPPER(TRIM(store_code)) = ?
           `,
           args: [
+            storeCode,
             accountStatus.ov,
             accountStatus.ou,
             accountStatus.tracker_status,
-            storeCode,
+            matchStoreCode,
           ],
         };
       })

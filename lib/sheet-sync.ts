@@ -18,6 +18,7 @@ import getDb from './db';
 import { getGoogleSheetsClient } from './google-sheets';
 import { getSheetSyncProvider } from './sheet-sync-config';
 import { deriveTrackerStatusFromSheet } from './status';
+import { legacyStoreCodesFor, normalizeStoreCode } from './store-code-aliases';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || '1DGAHE9zJ3Dy2VVgs_Jx9lMKYeW4Ox8FLSK7nRgJzWVY';
 const SHEET_TAB = process.env.GOOGLE_SHEET_TAB || 'Master Tracker';
@@ -69,6 +70,7 @@ type Row = Record<Column, string>;
 
 interface PullChange {
   store_code: string;
+  match_store_code?: string;
   changes: Record<string, [unknown, unknown]>;
 }
 
@@ -418,6 +420,18 @@ function getColumnIndexes(headerCells: string[]): Record<Column, number> {
   return Object.fromEntries(COLUMNS.map((c) => [c, indexForColumn(c)])) as Record<Column, number>;
 }
 
+function normText(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function rowIdentityKey(row: Partial<Record<Column, unknown>>): string {
+  return [
+    normText(row.business_name),
+    normText(row.country),
+    normText(row.city),
+  ].join('|');
+}
+
 /**
  * Scan the first N rows for one that contains "Store Code" — handles
  * sheets with a banner / legend / edit-rules block above the real header.
@@ -480,9 +494,22 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
     sql: `SELECT ${COLUMNS.join(', ')}, tracker_status FROM tracker_locations WHERE store_code IN (${placeholders})`,
     args: codes,
   });
+  const allDbResp = await db.execute(`SELECT ${COLUMNS.join(', ')}, tracker_status FROM tracker_locations`);
   const dbByCode = new Map<string, Record<string, unknown>>();
+  const allDbByCode = new Map<string, Record<string, unknown>>();
+  const allDbByIdentity = new Map<string, Record<string, unknown>[]>();
+  for (const row of allDbResp.rows as Record<string, unknown>[]) {
+    const code = normalizeStoreCode(row.store_code);
+    if (code) allDbByCode.set(code, row);
+    const identity = rowIdentityKey(row as Partial<Record<Column, unknown>>);
+    if (identity !== '||') {
+      const bucket = allDbByIdentity.get(identity) ?? [];
+      bucket.push(row);
+      allDbByIdentity.set(identity, bucket);
+    }
+  }
   for (const row of dbResp.rows) {
-    const code = String((row as Record<string, unknown>).store_code ?? '');
+    const code = normalizeStoreCode((row as Record<string, unknown>).store_code);
     if (code) dbByCode.set(code, row as Record<string, unknown>);
   }
 
@@ -493,12 +520,34 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
 
   for (const code of Array.from(sheetByCode.keys())) {
     const sheetRow = sheetByCode.get(code)!;
-    const dbRow = dbByCode.get(code);
+    let matchStoreCode = code;
+    let dbRow = dbByCode.get(code);
+    if (!dbRow) {
+      for (const legacyCode of legacyStoreCodesFor(code)) {
+        const legacyRow = allDbByCode.get(normalizeStoreCode(legacyCode));
+        if (legacyRow) {
+          dbRow = legacyRow;
+          matchStoreCode = String(legacyRow.store_code ?? legacyCode);
+          break;
+        }
+      }
+    }
+    if (!dbRow) {
+      const matches = allDbByIdentity.get(rowIdentityKey(sheetRow));
+      if (matches?.length === 1) {
+        dbRow = matches[0];
+        matchStoreCode = String(dbRow.store_code ?? '');
+      }
+    }
     if (!dbRow) {
       notInDb.push(code);
       continue;
     }
     const changes: Record<string, [unknown, unknown]> = {};
+    const dbStoreCode = String(dbRow.store_code ?? '').trim();
+    if (dbStoreCode !== code) {
+      changes.store_code = [dbStoreCode, code];
+    }
     for (const c of COLUMNS) {
       if (c === 'store_code') continue;
       // Sheet may have empty cells we don't want to use to wipe DB values.
@@ -518,7 +567,7 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
     if (Object.keys(changes).length === 0) {
       unchanged++;
     } else {
-      applied.push({ store_code: code, changes });
+      applied.push({ store_code: code, match_store_code: matchStoreCode, changes });
     }
   }
 
@@ -538,7 +587,7 @@ export async function pullFromSheet(dryRun = false): Promise<PullSummary> {
 export async function applyPullChanges(changesToApply: PullChange[]): Promise<{ applied: number }> {
   if (changesToApply.length === 0) return { applied: 0 };
   const db = getDb();
-  const statements = changesToApply.map(({ store_code, changes }) => {
+  const statements = changesToApply.map(({ store_code, match_store_code, changes }) => {
       const fields = Object.keys(changes);
       const setClauses = fields.map((f) => `${f} = ?`);
       setClauses.push('sheet_synced_at = NOW()');
@@ -548,7 +597,7 @@ export async function applyPullChanges(changesToApply: PullChange[]): Promise<{ 
       });
       return {
         sql: `UPDATE tracker_locations SET ${setClauses.join(', ')} WHERE store_code = ?`,
-        args: [...values, store_code],
+        args: [...values, match_store_code || store_code],
       };
     });
 
