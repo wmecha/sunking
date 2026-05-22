@@ -14,6 +14,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const country = searchParams.get('country') || '';
     const status = searchParams.get('status') || '';
+    const account = searchParams.get('account') || '';
+    const gbpStatus = searchParams.get('gbpStatus') || '';
+    const workflow = searchParams.get('workflow') || '';
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '50', 10);
@@ -22,26 +25,64 @@ export async function GET(request: NextRequest) {
     const whereParts: string[] = ['1=1'];
     const params: (string | number)[] = [];
 
-    if (country) { whereParts.push('country = ?'); params.push(country); }
+    if (country) { whereParts.push('t.country = ?'); params.push(country); }
     if (status) {
       const canonicalStatus = normalizeTrackerStatus(status);
       const aliases = canonicalStatus ? TRACKER_STATUS_ALIASES[canonicalStatus] : [status];
-      whereParts.push(`tracker_status IN (${aliases.map(() => '?').join(',')})`);
+      whereParts.push(`t.tracker_status IN (${aliases.map(() => '?').join(',')})`);
       params.push(...aliases);
     }
+    if (account === 'in') {
+      whereParts.push(`EXISTS (
+        SELECT 1
+        FROM gbp_locations g
+        WHERE g.snapshot_id = (SELECT id FROM gbp_snapshots ORDER BY imported_at DESC LIMIT 1)
+          AND UPPER(TRIM(g.store_code)) = UPPER(TRIM(t.store_code))
+      )`);
+    }
+    if (account === 'out') {
+      whereParts.push(`(
+        t.claiming_issue ILIKE '%Awaiting Response%'
+        OR t.claiming_issue ILIKE '%No Claim Option%'
+      )`);
+    }
+    if (gbpStatus === 'published') {
+      whereParts.push(`EXISTS (
+        SELECT 1
+        FROM gbp_locations g
+        WHERE g.snapshot_id = (SELECT id FROM gbp_snapshots ORDER BY imported_at DESC LIMIT 1)
+          AND UPPER(TRIM(g.store_code)) = UPPER(TRIM(t.store_code))
+          AND LOWER(TRIM(g.status)) = 'published'
+      )`);
+    }
+    if (gbpStatus === 'not_verified') {
+      whereParts.push(`EXISTS (
+        SELECT 1
+        FROM gbp_locations g
+        WHERE g.snapshot_id = (SELECT id FROM gbp_snapshots ORDER BY imported_at DESC LIMIT 1)
+          AND UPPER(TRIM(g.store_code)) = UPPER(TRIM(t.store_code))
+          AND LOWER(TRIM(g.status)) IN ('not published', 'duplicate')
+      )`);
+    }
+    if (workflow === 'submitted') {
+      whereParts.push("t.claiming_issue ILIKE '%Awaiting Response%'");
+    }
+    if (workflow === 'no_claim') {
+      whereParts.push("t.claiming_issue ILIKE '%No Claim Option%'");
+    }
     if (search) {
-      whereParts.push('(store_code ILIKE ? OR business_name ILIKE ? OR city ILIKE ? OR country ILIKE ? OR address ILIKE ?)');
+      whereParts.push('(t.store_code ILIKE ? OR t.business_name ILIKE ? OR t.city ILIKE ? OR t.country ILIKE ? OR t.address ILIKE ?)');
       const term = `%${search}%`;
       params.push(term, term, term, term, term);
     }
 
     const where = 'WHERE ' + whereParts.join(' AND ');
 
-    const countResult = await db.execute({ sql: `SELECT COUNT(*) as count FROM tracker_locations ${where}`, args: params });
+    const countResult = await db.execute({ sql: `SELECT COUNT(*) as count FROM tracker_locations t ${where}`, args: params });
     const total = Number(countResult.rows[0]?.count ?? 0);
 
     const dataResult = await db.execute({
-      sql: `SELECT * FROM tracker_locations ${where} ORDER BY country, business_name LIMIT ? OFFSET ?`,
+      sql: `SELECT t.* FROM tracker_locations t ${where} ORDER BY t.country, t.business_name LIMIT ? OFFSET ?`,
       args: [...params, pageSize, offset],
     });
 

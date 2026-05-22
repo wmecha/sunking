@@ -18,3 +18,13 @@ export function toIso2(country: string | null | undefined): string {
   if (!country) return '';
   return COUNTRY_TO_ISO2[country.trim()] ?? country.trim();
 }
+
+const ISO2_TO_COUNTRY = Object.fromEntries(
+  Object.entries(COUNTRY_TO_ISO2).map(([country, iso2]) => [iso2, country]),
+) as Record<string, string>;
+
+export function fromIso2(country: string | null | undefined): string {
+  if (!country) return '';
+  const trimmed = country.trim();
+  return ISO2_TO_COUNTRY[trimmed.toUpperCase()] ?? trimmed;
+}

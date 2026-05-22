@@ -30,6 +30,16 @@ interface CountryBreakdown {
   no_claim_option: number;
 }
 
+interface SnapshotRow {
+  id?: number;
+  total_count?: number;
+  published_count?: number;
+  not_published_count?: number;
+  duplicate_count?: number;
+  filename?: string;
+  imported_at?: string;
+}
+
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -48,8 +58,6 @@ async function getDashboardData() {
 
   const [
     totalResult,
-    verifiedResult,
-    notVerifiedResult,
     submittedResult,
     noClaimResult,
     countryResult,
@@ -58,10 +66,8 @@ async function getDashboardData() {
   ] =
     await Promise.all([
       db.execute("SELECT COUNT(*) as count FROM tracker_locations"),
-      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('In account verified')})`),
-      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('In account not verified')})`),
-      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('Submitted Claim Awaiting Response')})`),
-      db.execute(`SELECT COUNT(*) as count FROM tracker_locations WHERE tracker_status IN (${statusSql('No claim Option')})`),
+      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE claiming_issue ILIKE '%Awaiting Response%'"),
+      db.execute("SELECT COUNT(*) as count FROM tracker_locations WHERE claiming_issue ILIKE '%No Claim Option%'"),
       db.execute(`
         SELECT
           country,
@@ -79,12 +85,23 @@ async function getDashboardData() {
       db.execute('SELECT * FROM reconciliation_runs ORDER BY run_at DESC LIMIT 1'),
     ]);
 
+  const latestSnapshot = snapshotResult.rows[0] as SnapshotRow | undefined;
+  const inAccountVerified = Number(latestSnapshot?.published_count ?? 0);
+  const inAccountNotVerified = Number(latestSnapshot
+    ? Number(latestSnapshot.not_published_count ?? 0) + Number(latestSnapshot.duplicate_count ?? 0)
+    : 0);
+  const totalInAccount = Number(latestSnapshot?.total_count ?? (inAccountVerified + inAccountNotVerified));
+  const submittedClaimAwaitingResponse = Number(submittedResult.rows[0]?.count ?? 0);
+  const noClaimOption = Number(noClaimResult.rows[0]?.count ?? 0);
+
   return {
     totalLocations: Number(totalResult.rows[0]?.count ?? 0),
-    inAccountVerified: Number(verifiedResult.rows[0]?.count ?? 0),
-    inAccountNotVerified: Number(notVerifiedResult.rows[0]?.count ?? 0),
-    submittedClaimAwaitingResponse: Number(submittedResult.rows[0]?.count ?? 0),
-    noClaimOption: Number(noClaimResult.rows[0]?.count ?? 0),
+    totalInAccount,
+    totalNotInAccount: submittedClaimAwaitingResponse + noClaimOption,
+    inAccountVerified,
+    inAccountNotVerified,
+    submittedClaimAwaitingResponse,
+    noClaimOption,
     countryBreakdown: countryResult.rows.map((r) => ({
       country: String(r.country ?? ''),
       total: Number(r.total ?? 0),
@@ -93,7 +110,7 @@ async function getDashboardData() {
       submitted_claim_awaiting_response: Number(r.submitted_claim_awaiting_response ?? 0),
       no_claim_option: Number(r.no_claim_option ?? 0),
     })) as CountryBreakdown[],
-    latestSnapshot: snapshotResult.rows[0] as Record<string, unknown> | undefined,
+    latestSnapshot,
     lastReconciliation: reconResult.rows[0] as Record<string, unknown> | undefined,
   };
 }
@@ -110,7 +127,7 @@ export default async function DashboardPage() {
 
       <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3 sm:gap-4">
           <Link href="/tracker" className="block hover:-translate-y-0.5 transition-transform">
             <MetricCard
               label="Total locations"
@@ -120,7 +137,25 @@ export default async function DashboardPage() {
               accentColor="#F5C000"
             />
           </Link>
-          <Link href={`/tracker?status=${encodeURIComponent('In account verified')}`} className="block hover:-translate-y-0.5 transition-transform">
+          <Link href="/tracker?account=in" className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="Total in account"
+              value={data.totalInAccount}
+              subtext="Latest GBP export"
+              icon={<CheckCircle size={24} />}
+              accentColor="#0F766E"
+            />
+          </Link>
+          <Link href="/tracker?account=out" className="block hover:-translate-y-0.5 transition-transform">
+            <MetricCard
+              label="Total not in account"
+              value={data.totalNotInAccount}
+              subtext="Submitted + no claim"
+              icon={<AlertTriangle size={24} />}
+              accentColor="#B45309"
+            />
+          </Link>
+          <Link href="/tracker?gbpStatus=published" className="block hover:-translate-y-0.5 transition-transform">
             <MetricCard
               label="In account verified"
               value={data.inAccountVerified}
@@ -129,7 +164,7 @@ export default async function DashboardPage() {
               accentColor="#16A34A"
             />
           </Link>
-          <Link href={`/tracker?status=${encodeURIComponent('In account not verified')}`} className="block hover:-translate-y-0.5 transition-transform">
+          <Link href="/tracker?gbpStatus=not_verified" className="block hover:-translate-y-0.5 transition-transform">
             <MetricCard
               label="In account not verified"
               value={data.inAccountNotVerified}
@@ -138,7 +173,7 @@ export default async function DashboardPage() {
               accentColor="#2563EB"
             />
           </Link>
-          <Link href={`/tracker?status=${encodeURIComponent('Submitted Claim Awaiting Response')}`} className="block hover:-translate-y-0.5 transition-transform">
+          <Link href="/tracker?workflow=submitted" className="block hover:-translate-y-0.5 transition-transform">
             <MetricCard
               label="Submitted claims"
               value={data.submittedClaimAwaitingResponse}
@@ -147,7 +182,7 @@ export default async function DashboardPage() {
               accentColor="#D97706"
             />
           </Link>
-          <Link href={`/tracker?status=${encodeURIComponent('No claim Option')}`} className="block hover:-translate-y-0.5 transition-transform">
+          <Link href="/tracker?workflow=no_claim" className="block hover:-translate-y-0.5 transition-transform">
             <MetricCard
               label="No claim option"
               value={data.noClaimOption}

@@ -33,6 +33,9 @@ const SAVED_VIEWS = [
 export function TrackerTable() {
   const searchParams = useSearchParams();
   const initialStatus = searchParams.get('status') || '';
+  const initialAccount = searchParams.get('account') || '';
+  const initialGbpStatus = searchParams.get('gbpStatus') || '';
+  const initialWorkflow = searchParams.get('workflow') || '';
   const [data, setData] = useState<TrackerLocation[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -44,6 +47,9 @@ export function TrackerTable() {
   // Filters
   const [country, setCountry] = useState('');
   const [status, setStatus] = useState(initialStatus);
+  const [account, setAccount] = useState(initialAccount);
+  const [gbpStatus, setGbpStatus] = useState(initialGbpStatus);
+  const [workflow, setWorkflow] = useState(initialWorkflow);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [activeView, setActiveView] = useState(
@@ -64,6 +70,9 @@ export function TrackerTable() {
         pageSize: String(pageSize),
         ...(country && { country }),
         ...(status && { status }),
+        ...(account && { account }),
+        ...(gbpStatus && { gbpStatus }),
+        ...(workflow && { workflow }),
         ...(search && { search }),
       });
       const res = await fetch(`/api/tracker?${params}`);
@@ -78,13 +87,19 @@ export function TrackerTable() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, country, status, search]);
+  }, [page, pageSize, country, status, account, gbpStatus, workflow, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
     const nextStatus = searchParams.get('status') || '';
+    const nextAccount = searchParams.get('account') || '';
+    const nextGbpStatus = searchParams.get('gbpStatus') || '';
+    const nextWorkflow = searchParams.get('workflow') || '';
     setStatus(nextStatus);
+    setAccount(nextAccount);
+    setGbpStatus(nextGbpStatus);
+    setWorkflow(nextWorkflow);
     setActiveView(SAVED_VIEWS.find((view) => view.status === nextStatus)?.label ?? (nextStatus ? '' : 'All'));
     setPage(1);
   }, [searchParams]);
@@ -92,6 +107,9 @@ export function TrackerTable() {
   function applyView(view: typeof SAVED_VIEWS[0]) {
     setActiveView(view.label);
     setStatus(view.status);
+    setAccount('');
+    setGbpStatus('');
+    setWorkflow('');
     setCountry(view.country);
     setPage(1);
   }
@@ -104,7 +122,12 @@ export function TrackerTable() {
 
   function handleFilterChange(field: 'country' | 'status', value: string) {
     if (field === 'country') setCountry(value);
-    if (field === 'status') setStatus(value);
+    if (field === 'status') {
+      setStatus(value);
+      setAccount('');
+      setGbpStatus('');
+      setWorkflow('');
+    }
     setPage(1);
     setActiveView('');
   }
@@ -113,6 +136,9 @@ export function TrackerTable() {
     const params = new URLSearchParams({
       ...(country && { country }),
       ...(status && { status }),
+      ...(account && { account }),
+      ...(gbpStatus && { gbpStatus }),
+      ...(workflow && { workflow }),
     });
     window.location.href = `/api/export?${params}`;
   }

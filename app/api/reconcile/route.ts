@@ -181,6 +181,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       runId,
+      snapshotId: String(latestSnapshot.id),
       metrics: {
         totalGbp: gbpLocations.length,
         totalTracker: trackerLocations.length,

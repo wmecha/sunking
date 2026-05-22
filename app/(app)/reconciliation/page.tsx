@@ -61,6 +61,7 @@ interface ReconciliationDetails {
 }
 
 interface RunResult {
+  snapshotId: string;
   metrics: {
     totalGbp: number;
     totalTracker: number;
@@ -95,6 +96,8 @@ export default function ReconciliationPage() {
   const [appliedCodes, setAppliedCodes] = useState<Set<string>>(new Set());
   const [applyingAll, setApplyingAll] = useState(false);
   const [applyResult, setApplyResult] = useState<{ applied: number; errors: number } | null>(null);
+  const [addingMissing, setAddingMissing] = useState<Set<string>>(new Set());
+  const [addedMissing, setAddedMissing] = useState<Set<string>>(new Set());
 
   const fetchRuns = useCallback(async () => {
     try {
@@ -138,6 +141,7 @@ export default function ReconciliationPage() {
     setRunResult(null);
     setAppliedCodes(new Set());
     setApplyResult(null);
+    setAddedMissing(new Set());
 
     try {
       const res = await fetch('/api/reconcile', { method: 'POST' });
@@ -212,6 +216,33 @@ export default function ReconciliationPage() {
       await applyMismatchUpdates(pending);
     } finally {
       setApplyingAll(false);
+    }
+  }
+
+  async function handleAddMissing(row: { store_code: string }) {
+    if (!runResult) return;
+    setError('');
+    setAddingMissing((prev) => new Set(prev).add(row.store_code));
+    try {
+      const res = await fetch('/api/reconcile/add-missing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          snapshot_id: runResult.snapshotId,
+          store_code: row.store_code,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Add failed');
+      setAddedMissing((prev) => new Set(prev).add(row.store_code));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Add failed');
+    } finally {
+      setAddingMissing((prev) => {
+        const next = new Set(prev);
+        next.delete(row.store_code);
+        return next;
+      });
     }
   }
 
@@ -356,20 +387,40 @@ export default function ReconciliationPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">GBP Status</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Locality</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Country</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {runResult.details.missingFromTracker.length === 0 ? (
-                      <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">All GBP locations are in the tracker.</td></tr>
-                    ) : runResult.details.missingFromTracker.map((row) => (
-                      <tr key={row.id} className="border-b border-[#E5E7EB] hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-xs">{row.store_code || '—'}</td>
-                        <td className="px-4 py-3 font-medium text-[#1C2B3A]">{row.business_name || '—'}</td>
-                        <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                        <td className="px-4 py-3 text-gray-500">{row.city || '—'}</td>
-                        <td className="px-4 py-3 text-gray-500">{row.country || '—'}</td>
-                      </tr>
-                    ))}
+                      <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">All GBP locations are in the tracker.</td></tr>
+                    ) : runResult.details.missingFromTracker.map((row) => {
+                      const added = addedMissing.has(row.store_code);
+                      const adding = addingMissing.has(row.store_code);
+                      return (
+                        <tr key={row.id} className={`border-b border-[#E5E7EB] hover:bg-gray-50 ${added ? 'opacity-60' : ''}`}>
+                          <td className="px-4 py-3 font-mono text-xs">{row.store_code || '—'}</td>
+                          <td className="px-4 py-3 font-medium text-[#1C2B3A]">{row.business_name || '—'}</td>
+                          <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                          <td className="px-4 py-3 text-gray-500">{row.city || '—'}</td>
+                          <td className="px-4 py-3 text-gray-500">{row.country || '—'}</td>
+                          <td className="px-4 py-3 text-right">
+                            {added ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                                <CheckCircle size={13} /> Added
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleAddMissing(row)}
+                                disabled={adding}
+                                className="text-xs font-medium px-2.5 py-1 rounded border border-[#E5E7EB] hover:border-[#F5C000] hover:bg-yellow-50 disabled:opacity-50 transition-colors"
+                              >
+                                {adding ? 'Adding...' : 'Add to tracker'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
