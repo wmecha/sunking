@@ -8,6 +8,7 @@ import { getSheetSyncProvider, isSheetSyncEnabled } from '@/lib/sheet-sync-confi
 import { isGeocodingEnabled } from '@/lib/geocode';
 import { SyncPanel } from '@/components/settings/SyncPanel';
 import { GeocodePanel } from '@/components/settings/GeocodePanel';
+import { SourceTruthPanel } from '@/components/settings/SourceTruthPanel';
 import { Settings, Database, ShieldCheck, Info, RefreshCw, Map } from 'lucide-react';
 
 async function getSettingsData() {
@@ -75,6 +76,19 @@ export default async function SettingsPage() {
             Push overwrites the sheet from the DB; Pull reads the sheet and applies field-level updates.
           </p>
           <SyncPanel syncEnabled={syncEnabled} sheetUrl={sheetUrl} />
+        </Card>
+
+        {/* Source Truth Refresh */}
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Database size={18} className="text-[#F5C000]" />
+            <h2 className="text-base font-semibold text-[#1C2B3A]">Current Source Truth</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Applies the bundled current Master Tracker and latest GBP account export to the app database.
+            Use this before pushing the app state back to the Google Sheet.
+          </p>
+          <SourceTruthPanel />
         </Card>
 
         {/* Bulk Geocoding */}

@@ -45,6 +45,10 @@ export async function initializeSchema(): Promise<void> {
     address: string;
     city: string;
     tracker_status: string;
+    google_maps_url?: string;
+    primary_phone?: string;
+    website?: string;
+    primary_category?: string;
   }> = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
 
   console.log(`[schema] Seeding ${rows.length} tracker locations…`);
@@ -57,8 +61,9 @@ export async function initializeSchema(): Promise<void> {
       sql: `
         INSERT INTO tracker_locations
           (store_code, business_name, country, location_type, ov, ou,
-           claiming_issue, action_taken, address, city, tracker_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           claiming_issue, action_taken, address, city, tracker_status,
+           google_maps_url, primary_phone, website, primary_category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (store_code) DO NOTHING
       `,
       args: [
@@ -73,6 +78,10 @@ export async function initializeSchema(): Promise<void> {
         r.address       ?? null,
         r.city          ?? null,
         r.tracker_status ?? null,
+        r.google_maps_url ?? null,
+        r.primary_phone ?? null,
+        r.website ?? null,
+        r.primary_category ?? null,
       ],
     }));
 
