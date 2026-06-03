@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS tracker_locations (
   saturday_hours TEXT,
   sunday_hours TEXT,
   tracker_status TEXT,
+  duplicate_flag TEXT,
   updated_at     TIMESTAMPTZ DEFAULT NOW(),
   sheet_synced_at TIMESTAMPTZ
 );
@@ -80,6 +81,7 @@ ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS friday_hours TEXT;
 ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS saturday_hours TEXT;
 ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sunday_hours TEXT;
 ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sheet_synced_at TIMESTAMPTZ;
+ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS duplicate_flag TEXT;
 
 -- Reconciliation run history
 CREATE TABLE IF NOT EXISTS reconciliation_runs (

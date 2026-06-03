@@ -16,6 +16,7 @@ interface TrackerSeedRow {
   address?: string;
   city?: string;
   tracker_status?: string;
+  duplicate_flag?: string;
   google_maps_url?: string;
   primary_phone?: string;
   website?: string;
@@ -34,6 +35,7 @@ const TRACKER_FIELDS = [
   'address',
   'city',
   'tracker_status',
+  'duplicate_flag',
   'google_maps_url',
   'primary_phone',
   'website',

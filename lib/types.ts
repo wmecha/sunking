@@ -37,6 +37,11 @@ export interface TrackerLocation {
   address?: string;
   city?: string;
   tracker_status?: string;
+  // Duplicate marker. Empty/unset for normal rows. When a location has a
+  // duplicate listing (in Google or the tracker) the whole group is tagged
+  // "DUPLICATE #N (Label) — canonical|duplicate". Duplicates are flagged,
+  // never merged, and surfaced together in the tracker.
+  duplicate_flag?: string | null;
   // Canonical Google Maps Place URL (e.g. https://maps.app.goo.gl/...).
   // When set, the row's Maps link uses this exact URL — guaranteed to
   // land on the specific Sun King listing on Google. Falls back to a

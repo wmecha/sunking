@@ -45,6 +45,7 @@ export async function initializeSchema(): Promise<void> {
     address: string;
     city: string;
     tracker_status: string;
+    duplicate_flag?: string;
     google_maps_url?: string;
     primary_phone?: string;
     website?: string;
@@ -62,8 +63,8 @@ export async function initializeSchema(): Promise<void> {
         INSERT INTO tracker_locations
           (store_code, business_name, country, location_type, ov, ou,
            claiming_issue, action_taken, address, city, tracker_status,
-           google_maps_url, primary_phone, website, primary_category)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           duplicate_flag, google_maps_url, primary_phone, website, primary_category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (store_code) DO NOTHING
       `,
       args: [
@@ -78,6 +79,7 @@ export async function initializeSchema(): Promise<void> {
         r.address       ?? null,
         r.city          ?? null,
         r.tracker_status ?? null,
+        r.duplicate_flag ?? null,
         r.google_maps_url ?? null,
         r.primary_phone ?? null,
         r.website ?? null,
@@ -111,6 +113,7 @@ async function ensureTrackerColumns(db: ReturnType<typeof getDb>): Promise<void>
       { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS saturday_hours TEXT' },
       { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sunday_hours TEXT' },
       { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS sheet_synced_at TIMESTAMPTZ' },
+      { sql: 'ALTER TABLE tracker_locations ADD COLUMN IF NOT EXISTS duplicate_flag TEXT' },
     ]);
   } catch (err) {
     console.warn('[schema] Failed to ensure tracker location columns.', err);

@@ -36,6 +36,7 @@ export function TrackerTable() {
   const initialAccount = searchParams.get('account') || '';
   const initialGbpStatus = searchParams.get('gbpStatus') || '';
   const initialWorkflow = searchParams.get('workflow') || '';
+  const initialDuplicates = searchParams.get('duplicates') || '';
   const [data, setData] = useState<TrackerLocation[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -50,6 +51,7 @@ export function TrackerTable() {
   const [account, setAccount] = useState(initialAccount);
   const [gbpStatus, setGbpStatus] = useState(initialGbpStatus);
   const [workflow, setWorkflow] = useState(initialWorkflow);
+  const [duplicates, setDuplicates] = useState(initialDuplicates);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [activeView, setActiveView] = useState(
@@ -74,6 +76,7 @@ export function TrackerTable() {
         ...(account && { account }),
         ...(gbpStatus && { gbpStatus }),
         ...(workflow && { workflow }),
+        ...(duplicates && { duplicates }),
         ...(search && { search }),
       });
       const res = await fetch(`/api/tracker?${params}`);
@@ -88,7 +91,7 @@ export function TrackerTable() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, country, selectedStatuses, account, gbpStatus, workflow, search]);
+  }, [page, pageSize, country, selectedStatuses, account, gbpStatus, workflow, duplicates, search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -97,10 +100,12 @@ export function TrackerTable() {
     const nextAccount = searchParams.get('account') || '';
     const nextGbpStatus = searchParams.get('gbpStatus') || '';
     const nextWorkflow = searchParams.get('workflow') || '';
+    const nextDuplicates = searchParams.get('duplicates') || '';
     setSelectedStatuses(nextStatuses);
     setAccount(nextAccount);
     setGbpStatus(nextGbpStatus);
     setWorkflow(nextWorkflow);
+    setDuplicates(nextDuplicates);
     setActiveView(SAVED_VIEWS.find((view) => view.statuses.join(',') === nextStatuses.join(','))?.label ?? (nextStatuses.length ? '' : 'All'));
     setPage(1);
   }, [searchParams]);
@@ -111,8 +116,19 @@ export function TrackerTable() {
     setAccount('');
     setGbpStatus('');
     setWorkflow('');
+    setDuplicates('');
     setCountry(view.country);
     setPage(1);
+  }
+
+  function toggleDuplicates() {
+    setDuplicates((current) => (current === '1' ? '' : '1'));
+    setSelectedStatuses([]);
+    setAccount('');
+    setGbpStatus('');
+    setWorkflow('');
+    setPage(1);
+    setActiveView('');
   }
 
   function handleSearch() {
@@ -136,6 +152,7 @@ export function TrackerTable() {
     setAccount('');
     setGbpStatus('');
     setWorkflow('');
+    setDuplicates('');
     setPage(1);
     setActiveView('');
   }
@@ -220,6 +237,17 @@ export function TrackerTable() {
             {view.label}
           </button>
         ))}
+        <button
+          onClick={toggleDuplicates}
+          title="Show only locations flagged as duplicates (grouped together)"
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+            duplicates === '1'
+              ? 'bg-red-600 text-white border-red-600'
+              : 'bg-white text-red-600 border-red-200 hover:border-red-400'
+          }`}
+        >
+          ⚠ Duplicates
+        </button>
       </div>
 
       {/* Filter Bar */}
@@ -403,21 +431,35 @@ export function TrackerTable() {
                       ) : null}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-[#374151] whitespace-nowrap">{row.store_code || '—'}</td>
-                    <td className="px-4 py-3 max-w-[220px]">
-                      {row.business_name ? (
-                        <a
-                          href={googleMapsUrl(row)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-medium text-[#1C2B3A] hover:text-blue-600 hover:underline transition-colors truncate inline-block max-w-full align-bottom"
-                          title="Open in Google Maps"
-                        >
-                          {row.business_name}
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                    <td className="px-4 py-3 max-w-[260px]">
+                      <div className="flex items-center gap-1.5">
+                        {row.business_name ? (
+                          <a
+                            href={googleMapsUrl(row)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-[#1C2B3A] hover:text-blue-600 hover:underline transition-colors truncate inline-block max-w-full align-bottom"
+                            title="Open in Google Maps"
+                          >
+                            {row.business_name}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                        {row.duplicate_flag ? (
+                          <span
+                            title={row.duplicate_flag}
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              /—\s*duplicate/i.test(row.duplicate_flag)
+                                ? 'bg-red-100 text-red-700 border border-red-200'
+                                : 'bg-amber-100 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {/—\s*duplicate/i.test(row.duplicate_flag) ? 'DUP' : 'DUP?'}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-[#374151] whitespace-nowrap">{row.country || '—'}</td>
                     <td className="px-4 py-3 text-[#374151] whitespace-nowrap">{row.city || '—'}</td>

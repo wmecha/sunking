@@ -12,6 +12,10 @@ const LEGACY_CODES_BY_CURRENT: Record<string, string[]> = {
   '13930556144563645701': ['SKNG110'],
   SKTZ599: ['05381297372336212803'],
   '07792265113715852457': ['7792265113715852457'],
+  // Leading-zero variants: Google's export drops the leading 0 and flags the
+  // stripped form as a Duplicate. Map the stripped code back to the canonical.
+  '08294824709221259563': ['8294824709221259563'], // Sun King Store Owerri
+  '06418181730203418502': ['6418181730203418502'], // Sun King Shop Samfya
 };
 
 export function normalizeStoreCode(code: unknown): string {

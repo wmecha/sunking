@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const account = searchParams.get('account') || '';
     const gbpStatus = searchParams.get('gbpStatus') || '';
     const workflow = searchParams.get('workflow') || '';
+    const duplicates = searchParams.get('duplicates') || '';
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '50', 10);
@@ -76,6 +77,9 @@ export async function GET(request: NextRequest) {
     if (workflow === 'no_claim') {
       whereParts.push("t.claiming_issue ILIKE '%No Claim Option%'");
     }
+    if (duplicates === '1') {
+      whereParts.push("t.duplicate_flag IS NOT NULL AND t.duplicate_flag != ''");
+    }
     if (search) {
       whereParts.push('(t.store_code ILIKE ? OR t.business_name ILIKE ? OR t.city ILIKE ? OR t.country ILIKE ? OR t.address ILIKE ?)');
       const term = `%${search}%`;
@@ -87,8 +91,14 @@ export async function GET(request: NextRequest) {
     const countResult = await db.execute({ sql: `SELECT COUNT(*) as count FROM tracker_locations t ${where}`, args: params });
     const total = Number(countResult.rows[0]?.count ?? 0);
 
+    // When viewing duplicates, cluster each group together (canonical row
+    // before its duplicate); otherwise sort by country + name as usual.
+    const orderBy = duplicates === '1'
+      ? 'ORDER BY t.duplicate_flag, t.country, t.business_name'
+      : 'ORDER BY t.country, t.business_name';
+
     const dataResult = await db.execute({
-      sql: `SELECT t.* FROM tracker_locations t ${where} ORDER BY t.country, t.business_name LIMIT ? OFFSET ?`,
+      sql: `SELECT t.* FROM tracker_locations t ${where} ${orderBy} LIMIT ? OFFSET ?`,
       args: [...params, pageSize, offset],
     });
 
