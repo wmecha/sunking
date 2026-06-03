@@ -16,6 +16,11 @@ const LEGACY_CODES_BY_CURRENT: Record<string, string[]> = {
   // stripped form as a Duplicate. Map the stripped code back to the canonical.
   '08294824709221259563': ['8294824709221259563'], // Sun King Store Owerri
   '06418181730203418502': ['6418181730203418502'], // Sun King Shop Samfya
+  // Claimed shops whose stale internal SK code rows were removed from the DB
+  // (2026-06-03) once the claimed Google-coded row existed in the sheet.
+  '15525280659063073239': ['SKNG046'],   // Langtang North
+  '18019787613912518149': ['SKNG091'],   // Ipaja Ayobo
+  '12610017379071464310': ['SKZMHO037'], // Zambia Head Office
 };
 
 export function normalizeStoreCode(code: unknown): string {
