@@ -111,7 +111,7 @@ export function Sidebar() {
           Go to GBP Locations
         </a>
         <a
-          href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+          href="https://support.google.com/business/gethelp"
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => setMobileOpen(false)}

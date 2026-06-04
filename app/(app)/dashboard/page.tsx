@@ -321,7 +321,7 @@ export default async function DashboardPage() {
                   Go to Google Profile Locations
                 </a>
                 <a
-                  href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+                  href="https://support.google.com/business/gethelp"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-400 transition-colors"

@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to .mcp.json and fill in YOUR Composio MCP endpoint. The URL/key is tied to your Composio account (googlesheets toolkit connected as admin@wallacemecha.com) and must NOT be committed. In Claude Code you can instead run: claude mcp add. For Codex, put the equivalent under ~/.codex/config.toml [mcp_servers.composio]; for Hermes, add the same remote MCP URL in its MCP settings.",
+  "mcpServers": {
+    "composio": {
+      "type": "http",
+      "url": "https://mcp.composio.dev/<your-composio-mcp-server-id>/mcp"
+    }
+  }
+}

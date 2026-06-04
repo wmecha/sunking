@@ -136,7 +136,7 @@ export default function QualityControlPage() {
       <div className="mx-3 sm:mx-6 mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
         <p className="text-sm text-amber-800 font-medium">Issues found? Raise a support request directly with Google Business Profile.</p>
         <a
-          href="https://support.google.com/business?hl=en&sjid=7985649567810165233-EU#topic=11498229"
+          href="https://support.google.com/business/gethelp"
           target="_blank"
           rel="noopener noreferrer"
           className="flex shrink-0 items-center gap-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 hover:border-red-500 transition-colors"
